@@ -13,6 +13,7 @@ import utils from './bin-utils';
 import xhr from './xhr';
 import resolveUrl from './resolve-url';
 import videojs from 'video.js';
+import Ranges from './ranges';
 
 const Player = videojs.getComponent('Player');
 
@@ -26,8 +27,6 @@ const bandwidthVariance = 1.2;
 
 // 5 minute blacklist
 const blacklistDuration = 5 * 60 * 1000;
-// Fudge factor to account for TimeRanges rounding
-const TIME_FUDGE_FACTOR = 1 / 30;
 const Component = videojs.getComponent('Component');
 
 // The amount of time to wait between checking the state of the buffer
@@ -499,7 +498,7 @@ HlsHandler.prototype.play = function() {
 };
 
 HlsHandler.prototype.setCurrentTime = function(currentTime) {
-  let buffered = this.findBufferedRange_();
+  let buffered = Ranges.findRange_(this.tech_.buffered(), currentTime);
 
   if (!(this.playlists && this.playlists.media())) {
     // return immediately if the metadata is not ready yet
@@ -836,32 +835,6 @@ const filterBufferedRanges = function(predicate) {
 };
 
 /**
- * Attempts to find the buffered TimeRange that contains the specified
- * time, or where playback is currently happening if no specific time
- * is specified.
- * @param time (optional) {number} the time to filter on. Defaults to
- * currentTime.
- * @return a new TimeRanges object.
- */
-HlsHandler.prototype.findBufferedRange_ = filterBufferedRanges(
-function(start, end, time) {
-  return start - TIME_FUDGE_FACTOR <= time &&
-    end + TIME_FUDGE_FACTOR >= time;
-});
-
-/**
- * Returns the TimeRanges that begin at or later than the specified
- * time.
- * @param time (optional) {number} the time to filter on. Defaults to
- * currentTime.
- * @return a new TimeRanges object.
- */
-HlsHandler.prototype.findNextBufferedRange_ = filterBufferedRanges(
-function(start, end, time) {
-  return start - TIME_FUDGE_FACTOR >= time;
-});
-
-/**
  * Determines whether there is enough video data currently in the buffer
  * and downloads a new segment if the buffered time is less than the goal.
  * @param seekToTime (optional) {number} the offset into the downloaded segment
@@ -871,7 +844,13 @@ HlsHandler.prototype.fillBuffer = function(mediaIndex) {
   let tech = this.tech_;
   let currentTime = tech.currentTime();
   let hasBufferedContent = (this.tech_.buffered().length !== 0);
-  let currentBuffered = this.findBufferedRange_();
+  // !!The order of the next two assignments is important!!
+  // `currentTime` must be equal-to or greater-than the start of the
+  // buffered range. Flash executes out-of-process so, every value can
+  // change behind the scenes from line-to-line. By reading `currentTime`
+  // after `buffered`, we ensure that it is always a current or later
+  // value during playback.
+  let currentBuffered = Ranges.findRange_(tech.buffered(), tech.currentTime());
   let outsideBufferedRanges = !(currentBuffered && currentBuffered.length);
   let currentBufferedEnd = 0;
   let bufferedTime = 0;
@@ -1265,7 +1244,13 @@ HlsHandler.prototype.updateEndHandler_ = function() {
   segments = playlist.segments;
   currentMediaIndex = segmentInfo.mediaIndex +
     (segmentInfo.mediaSequence - playlist.mediaSequence);
-  currentBuffered = this.findBufferedRange_();
+  // !!The order of the next two assignments is important!!
+  // `currentTime` must be equal-to or greater-than the start of the
+  // buffered range. Flash executes out-of-process so, every value can
+  // change behind the scenes from line-to-line. By reading `currentTime`
+  // after `buffered`, we ensure that it is always a current or later
+  // value during playback.
+  currentBuffered = Ranges.findRange_(this.tech_.buffered(), this.tech_.currentTime());
 
   // if we switched renditions don't try to add segment timeline
   // information to the playlist
@@ -1286,19 +1271,19 @@ HlsHandler.prototype.updateEndHandler_ = function() {
       currentBuffered.length === 0) {
     if (seekable.length &&
         this.tech_.currentTime() < seekable.start(0)) {
-      let next = this.findNextBufferedRange_();
+      let next = Ranges.findNextRange_(this.tech_.buffered(), this.tech_.currentTime());
 
       if (next.length) {
         videojs.log(
           'tried seeking to', this.tech_.currentTime(),
           'but that was too early, retrying at', next.start(0)
         );
-        this.tech_.setCurrentTime(next.start(0) + TIME_FUDGE_FACTOR);
+        this.tech_.setCurrentTime(next.start(0) + Ranges.TIME_FUDGE_FACTOR);
       }
     }
   }
 
-  timelineUpdate = Hls.findSoleUncommonTimeRangesEnd_(
+  timelineUpdate = Ranges.findSoleUncommonTimeRangesEnd_(
     segmentInfo.buffered,
     this.tech_.buffered()
   );

@@ -119,6 +119,57 @@ QUnit.test('jumps to HAVE_METADATA when initialized with a media playlist', func
   QUnit.strictEqual(loadedmetadatas, 1, 'fired one loadedmetadata');
 });
 
+QUnit.test('resolves relative media playlist URIs', function() {
+  let loader = new videojs.Hls.PlaylistLoader('master.m3u8');
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-STREAM-INF:\n' +
+                                'video/media.m3u8\n');
+  QUnit.equal(loader.master.playlists[0].resolvedUri, urlTo('video/media.m3u8'),
+              'resolved media URI');
+});
+
+QUnit.test('recognizes absolute URIs and requests them unmodified', function() {
+  let loader = new videojs.Hls.PlaylistLoader('manifest/media.m3u8');
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-STREAM-INF:\n' +
+                                'http://example.com/video/media.m3u8\n');
+  QUnit.equal(loader.master.playlists[0].resolvedUri, 'http://example.com/video/media.m3u8',
+              'resolved media URI');
+
+
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXTINF:10,\n' +
+                                'http://example.com/00001.ts\n' +
+                                '#EXT-X-ENDLIST\n');
+  QUnit.equal(loader.media().segments[0].resolvedUri,
+              'http://example.com/00001.ts', 'resolved segment URI');
+});
+
+QUnit.test('recognizes domain-relative URLs', function() {
+  let loader = new videojs.Hls.PlaylistLoader('manifest/media.m3u8');
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-STREAM-INF:\n' +
+                                '/media.m3u8\n');
+  QUnit.equal(loader.master.playlists[0].resolvedUri,
+              window.location.protocol + '//' +
+              window.location.host + '/media.m3u8',
+              'resolved media URI');
+
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXTINF:10,\n' +
+                                '/00001.ts\n' +
+                                '#EXT-X-ENDLIST\n');
+  QUnit.equal(loader.media().segments[0].resolvedUri,
+              window.location.protocol + '//' +
+              window.location.host + '/00001.ts',
+              'resolved segment URI');
+});
+
 QUnit.test(
 'jumps to HAVE_METADATA when initialized with a live media playlist',
 function() {
@@ -913,9 +964,13 @@ QUnit.test('errors if this.requests take longer than 45s', function() {
 QUnit.test('triggers an event when the active media changes', function() {
   let loader = new PlaylistLoader('master.m3u8');
   let mediaChanges = 0;
+  let mediaChangings = 0;
 
   loader.on('mediachange', function() {
     mediaChanges++;
+  });
+  loader.on('mediachanging', function() {
+    mediaChangings++;
   });
   this.requests.pop().respond(200, null,
     '#EXTM3U\n' +
@@ -930,9 +985,11 @@ QUnit.test('triggers an event when the active media changes', function() {
     '#EXTINF:10,\n' +
     'low-0.ts\n' +
     '#EXT-X-ENDLIST\n');
+  QUnit.strictEqual(mediaChangings, 0, 'initial selection is not a media changing');
   QUnit.strictEqual(mediaChanges, 0, 'initial selection is not a media change');
 
   loader.media('high.m3u8');
+  QUnit.strictEqual(mediaChangings, 1, 'mediachanging fires immediately');
   QUnit.strictEqual(mediaChanges, 0, 'mediachange does not fire immediately');
 
   this.requests.shift().respond(200, null,
@@ -942,14 +999,17 @@ QUnit.test('triggers an event when the active media changes', function() {
     'high-0.ts\n' +
     '#EXT-X-ENDLIST\n'
   );
+  QUnit.strictEqual(mediaChangeings, 1, 'still one mediachanging');
   QUnit.strictEqual(mediaChanges, 1, 'fired a mediachange');
 
   // switch back to an already loaded playlist
   loader.media('low.m3u8');
+  QUnit.strictEqual(mediaChangings, 2, 'mediachanging fires');
   QUnit.strictEqual(mediaChanges, 2, 'fired a mediachange');
 
   // trigger a no-op switch
   loader.media('low.m3u8');
+  QUnit.strictEqual(mediaChangings, 2, 'mediachanging ignored the no-op');
   QUnit.strictEqual(mediaChanges, 2, 'ignored a no-op media change');
 });
 

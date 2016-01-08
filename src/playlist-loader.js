@@ -55,6 +55,8 @@ const updateMaster = function(master, media) {
   let result = mergeOptions(master, {});
   let i = master.playlists.length;
   let playlist;
+  let segment;
+  let j;
 
   while (i--) {
     playlist = result.playlists[i];
@@ -79,6 +81,17 @@ const updateMaster = function(master, media) {
           media.segments,
           media.mediaSequence - playlist.mediaSequence
         );
+      }
+      // resolve any missing segment URIs
+      j = 0;
+      if (result.playlists[i].segments) {
+        j = result.playlists[i].segments.length;
+      }
+      while (j--) {
+        segment = result.playlists[i].segments[j];
+        if (!segment.resolvedUri) {
+          segment.resolvedUri = resolveUrl(playlist.resolvedUri, segment.uri);
+        }
       }
       changed = true;
     }
@@ -278,8 +291,8 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
     loader.bandwidth = xhr.bandwidth;
   };
 
-  // In a live list, don't keep track of the expired time until
-  // HLS tells us that "first play" has commenced
+  // In a live playlist, don't keep track of the expired time
+  // until HLS tells us that "first play" has commenced
   loader.on('firstplay', function() {
     this.trackExpiredTime_ = true;
   });
@@ -306,6 +319,7 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
     withCredentials
   }, function(error, req) {
     let parser;
+    let playlist;
     let i;
 
     // clear the loader's request reference
@@ -334,11 +348,12 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
     if (parser.manifest.playlists) {
       loader.master = parser.manifest;
 
-      // setup by-URI lookups
+      // setup by-URI lookups and resolve media playlist URIs
       i = loader.master.playlists.length;
       while (i--) {
-        loader.master.playlists[loader.master.playlists[i].uri] =
-          loader.master.playlists[i];
+        playlist = loader.master.playlists[i];
+        loader.master.playlists[playlist.uri] = playlist;
+        playlist.resolvedUri = resolveUrl(loader.master.uri, playlist.uri);
       }
 
       loader.trigger('loadedplaylist');
@@ -359,6 +374,7 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
       }]
     };
     loader.master.playlists[srcUrl] = loader.master.playlists[0];
+    loader.master.playlists[0].resolvedUri = srcUrl;
     haveMetadata(null, req, srcUrl);
     return loader.trigger('loadedmetadata');
   });
