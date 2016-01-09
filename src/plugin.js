@@ -189,17 +189,10 @@ HlsHandler.prototype.src = function(src) {
   } else if (videojs.options.hls) {
     this.options_.withCredentials = videojs.options.hls.withCredentials;
   }
-  this.playlists = new Hls.PlaylistLoader(
-    this.source_.src,
-    this.options_.withCredentials
-  );
-  this.segments = new videojs.Hls.SegmentLoader({
-    currentTime: this.tech_.currentTime.bind(this.tech_),
-    mediaSource: this.mediaSource,
-    withCredentials: this.options_.withCredentials
-  });
 
   this.tech_.one('canplay', this.setupFirstPlay.bind(this));
+
+  this.playlists = new Hls.PlaylistLoader(this.source_.src, this.options_.withCredentials);
 
   this.playlists.on('loadedmetadata', function() {
     oldMediaPlaylist = this.playlists.media();
@@ -212,12 +205,11 @@ HlsHandler.prototype.src = function(src) {
       this.loadingState_ = 'segments';
 
       this.segments.playlist(this.playlists.media());
-      //this.segments.load();
+      this.segments.load();
     }
 
     this.setupSourceBuffer_();
     this.setupFirstPlay();
-    this.fillBuffer();
     this.tech_.trigger('loadedmetadata');
   }.bind(this));
 
@@ -254,6 +246,28 @@ HlsHandler.prototype.src = function(src) {
       bubbles: true
     });
   }.bind(this));
+
+  this.segments = new videojs.Hls.SegmentLoader({
+    currentTime: this.tech_.currentTime.bind(this.tech_),
+    mediaSource: this.mediaSource,
+    withCredentials: this.options_.withCredentials
+  });
+
+  this.segments.on('progress', function() {
+    // figure out what stream the next segment should be downloaded from
+    // with the updated bandwidth information
+    this.bandwidth = this.segments.bandwidth;
+    this.playlists.media(this.selectPlaylist());
+  }.bind(this));
+  this.segments.on('error', function() {
+    this.blacklistCurrentPlaylist_(this.segments.error());
+  }.bind(this));
+
+  this.segments = new Hls.SegmentLoader({
+    currentTime: this.tech_.currentTime.bind(this.tech_),
+    mediaSource: this.mediaSource,
+    withCredentials: this.options_.withCredentials
+  });
 
   // do nothing if the tech has been disposed already
   // this can occur if someone sets the src in player.ready(), for instance
@@ -533,17 +547,19 @@ HlsHandler.prototype.setCurrentTime = function(currentTime) {
 
   this.lastSegmentLoaded_ = null;
 
-  // cancel outstanding requests and buffer appends
-  this.cancelSegmentXhr();
+  // cancel outstanding requests so we begin buffering at the new
+  // location
+  this.segments.abort();
+
+  if (!this.tech_.paused()) {
+    this.segments.load();
+  }
 
   // abort outstanding key requests, if necessary
   if (this.keyXhr_) {
     this.keyXhr_.aborted = true;
     this.cancelKeyXhr();
   }
-
-  // begin filling the buffer at the new position
-  this.fillBuffer(this.playlists.getMediaIndexForTime_(currentTime));
 };
 
 HlsHandler.prototype.duration = function() {
@@ -637,18 +653,6 @@ HlsHandler.prototype.cancelKeyXhr = function() {
   }
 };
 
-HlsHandler.prototype.cancelSegmentXhr = function() {
-  if (this.segmentXhr_) {
-    // Prevent error handler from running.
-    this.segmentXhr_.onreadystatechange = null;
-    this.segmentXhr_.abort();
-    this.segmentXhr_ = null;
-  }
-
-  // clear out the segment being processed
-  this.pendingSegment_ = null;
-};
-
 /**
  * Abort all outstanding work and cleanup.
  */
@@ -657,6 +661,9 @@ HlsHandler.prototype.dispose = function() {
 
   if (this.playlists) {
     this.playlists.dispose();
+  }
+  if (this.segments) {
+    this.segments.dispose();
   }
 
   this.resetSrc_();
