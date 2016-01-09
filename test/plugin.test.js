@@ -281,6 +281,15 @@ QUnit.test('creates a PlaylistLoader on init', function() {
   );
 });
 
+Qunit.test('creates a SegmentLoader on init', function() {
+  this.player.src({
+    src: 'manifest/playlist.m3u8',
+    type: 'application/vnd.apple.mpegurl'
+  });
+  Helper.openMediaSource(this.player, this.clock);
+  equal(this.player.tech_.hls.segments.state, 'INIT', 'created a segment loader');
+});
+
 QUnit.test('re-initializes the playlist loader when switching sources', function() {
   // source is set
   this.player.src({
@@ -319,6 +328,50 @@ QUnit.test('re-initializes the playlist loader when switching sources', function
     this.requests[0].url.indexOf('master.m3u8') >= 0,
       'requested only the new playlist'
   );
+});
+
+QUnit.test('updates the segment loader on media changes', function() {
+  let updates = [];
+  let hls;
+  this.player.src({
+    src: 'manifest/master.m3u8',
+    type: 'application/vnd.apple.mpegurl'
+  });
+  Helper.openMediaSource(this.player);
+  hls = this.player.tech_.hls;
+
+  hls.bandwidth = 1;
+  Helper.standardXHRResponse(this.requests.shift()); // master
+  Helper.standardXHRResponse(this.requests.shift()); // media
+  hls.segments.playlist = function(update) {
+    updates.push(update);
+  };
+
+  // downloading the new segment will update bandwidth and cause a
+  // playlist change
+  Helper.standardXHRResponse(this.requests.shift()); // segment 0
+  Helper.standardXHRResponse(this.requests.shift()); // media
+  QUnit.equal(updates.length, 1, 'updated the segment list');
+});
+
+QUnit.test('updates the segment loader on live playlist refreshes', function() {
+  let updates = [];
+  let hls;
+  this.player.src({
+    src: 'manifest/master.m3u8',
+    type: 'application/vnd.apple.mpegurl'
+  });
+  Helper.openMediaSource(this.player);
+  hls = this.player.tech_.hls;
+
+  Helper.standardXHRResponse(this.requests.shift()); // master
+  Helper.standardXHRResponse(this.requests.shift()); // media
+  hls.segments.playlist = function(update) {
+    updates.push(update);
+  };
+
+  hls.playlists.trigger('loadedplaylist');
+  QUnit.equal(updates.length, 1, 'updated the segment list');
 });
 
 QUnit.test('sets the duration if one is available on the playlist', function() {

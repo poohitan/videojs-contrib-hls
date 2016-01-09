@@ -193,6 +193,11 @@ HlsHandler.prototype.src = function(src) {
     this.source_.src,
     this.options_.withCredentials
   );
+  this.segments = new videojs.Hls.SegmentLoader({
+    currentTime: this.tech_.currentTime.bind(this.tech_),
+    mediaSource: this.mediaSource,
+    withCredentials: this.options_.withCredentials
+  });
 
   this.tech_.one('canplay', this.setupFirstPlay.bind(this));
 
@@ -205,6 +210,9 @@ HlsHandler.prototype.src = function(src) {
         this.tech_.preload() !== 'metadata' &&
         this.tech_.preload() !== 'none') {
       this.loadingState_ = 'segments';
+
+      this.segments.playlist(this.playlists.media());
+      //this.segments.load();
     }
 
     this.setupSourceBuffer_();
@@ -227,7 +235,8 @@ HlsHandler.prototype.src = function(src) {
       return;
     }
 
-    this.updateDuration(this.playlists.media());
+    this.segments.playlist(updatedPlaylist);
+    this.updateDuration(updatedPlaylist);
 
     // update seekable
     seekable = this.seekable();
