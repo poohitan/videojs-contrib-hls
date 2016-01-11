@@ -1018,38 +1018,6 @@ function() {
   QUnit.equal(alternatePlaylist.excludeUntil, Infinity, 'excluded incompatible playlist');
 });
 
-QUnit.test(
-'waits to download new segments until the media playlist is stable',
-function() {
-  this.player.src({
-    src: 'manifest/master.m3u8',
-    type: 'application/vnd.apple.mpegurl'
-  });
-  Helper.openMediaSource(this.player, this.clock);
-  // make sure we stay on the lowest variant
-  this.player.tech_.hls.bandwidth = 1;
-  // master
-  Helper.standardXHRResponse(this.requests.shift());
-  // media1
-  Helper.standardXHRResponse(this.requests.shift());
-
-  // force a playlist switch
-  this.player.tech_.hls.playlists.media('media3.m3u8');
-
-  // segment 0
-  Helper.standardXHRResponse(this.requests.shift());
-  this.player.tech_.hls.sourceBuffer.trigger('updateend');
-
-  QUnit.equal(this.requests.length, 1, 'only the playlist request outstanding');
-  this.player.tech_.hls.checkBuffer_();
-  QUnit.equal(this.requests.length, 1, 'delays segment fetching');
-
-  // media3
-  Helper.standardXHRResponse(this.requests.shift());
-  this.player.tech_.hls.checkBuffer_();
-  QUnit.equal(this.requests.length, 1, 'resumes segment fetching');
-});
-
 QUnit.test('cancels outstanding XHRs when seeking', function() {
   this.player.src({
     src: 'manifest/media.m3u8',
@@ -1988,4 +1956,34 @@ QUnit.test('downloads additional playlists if required', function() {
            hls.playlists.media().resolvedUri,
            'a new playlists was selected');
   QUnit.ok(hls.playlists.media().segments, 'segments are now available');
+});
+
+QUnit.test(
+'waits to download new segments until the media playlist is stable',
+function() {
+  let sourceBuffer;
+  let hls = videojs.HlsSourceHandler('html5').handleSource({
+    src: 'manifest/master.m3u8',
+    type: 'application/vnd.apple.mpegurl'
+  }, this.tech);
+  hls.mediaSource.trigger('sourceopen');
+  sourceBuffer = hls.mediaSource.sourceBuffers[0];
+
+  hls.bandwidth = 1; // make sure we stay on the lowest variant
+  Helper.standardXHRResponse(this.requests.shift()); // master
+  Helper.standardXHRResponse(this.requests.shift()); // media1
+
+  // force a playlist switch
+  hls.playlists.media('media3.m3u8');
+
+  Helper.standardXHRResponse(this.requests.shift()); // segment 0
+  sourceBuffer.trigger('updateend');
+
+  QUnit.equal(this.requests.length, 1, 'only the playlist request outstanding');
+  this.clock.tick(10 * 1000);
+  QUnit.equal(this.requests.length, 1, 'delays segment fetching');
+
+  Helper.standardXHRResponse(this.requests.shift()); // media3
+  this.clock.tick(10 * 1000);
+  QUnit.equal(this.requests.length, 1, 'resumes segment fetching');
 });

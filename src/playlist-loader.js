@@ -243,6 +243,7 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
 
       // trigger media change if the active media has been updated
       if (mediaChange) {
+        loader.trigger('mediachanging');
         loader.trigger('mediachange');
       }
       return;
@@ -268,6 +269,9 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
     }
 
     // request the new playlist
+    if (this.media_) {
+      this.trigger('mediachanging');
+    }
     request = XhrModule({
       uri: resolveUrl(loader.master.uri, playlist.uri),
       withCredentials
