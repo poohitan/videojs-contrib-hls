@@ -317,7 +317,7 @@ QUnit.test('re-initializes the playlist loader when switching sources', function
   QUnit.equal(this.requests.length, 1, 'requested the new src');
 
   // buffer check
-  this.player.tech_.hls.checkBuffer_();
+  this.clock.tick(10 * 1000);
   QUnit.equal(this.requests.length, 1, 'did not request a stale segment');
 
   // sourceopen
@@ -1817,7 +1817,7 @@ QUnit.test('does not download segments if preload option set to none', function(
   Helper.standardXHRResponse(this.requests.shift());
   // media
   Helper.standardXHRResponse(this.requests.shift());
-  this.player.tech_.hls.checkBuffer_();
+  this.clock.tick(10 * 1000);
 
   this.requests = this.requests.filter(function(request) {
     return !(/m3u8$/).QUnit.test(request.uri);
