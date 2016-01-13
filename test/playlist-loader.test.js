@@ -170,6 +170,57 @@ QUnit.test('recognizes domain-relative URLs', function() {
               'resolved segment URI');
 });
 
+QUnit.test('recognizes key URLs relative to master and playlist', function() {
+  let loader = new videojs.Hls.PlaylistLoader('video/media-encrypted.m3u8');
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=17\n' +
+                                'playlist/playlist.m3u8\n' +
+                                '#EXT-X-ENDLIST\n');
+  QUnit.equal(loader.master.playlists[0].resolvedUri,
+        window.location.protocol + '//' +
+        window.location.host + '/video/playlist/playlist.m3u8',
+        'resolved media URI');
+
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-TARGETDURATION:15\n' +
+                                '#EXT-X-KEY:METHOD=AES-128,URI="keys/key.php"\n' +
+                                '#EXTINF:2.833,\n' +
+                                'http://example.com/000001.ts\n' +
+                                '#EXT-X-ENDLIST\n');
+  QUnit.equal(loader.media().segments[0].key.resolvedUri,
+        window.location.protocol + '//' +
+        window.location.host + '/video/playlist/keys/key.php',
+        'resolved multiple relative paths for key URI');
+});
+
+QUnit.test('recognizes absolute key URLs', function() {
+  let loader = new videojs.Hls.PlaylistLoader('video/media-encrypted.m3u8');
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=17\n' +
+                                'playlist/playlist.m3u8\n' +
+                                '#EXT-X-ENDLIST\n');
+  QUnit.equal(loader.master.playlists[0].resolvedUri,
+        window.location.protocol + '//' +
+        window.location.host + '/video/playlist/playlist.m3u8',
+        'resolved media URI');
+
+  this.requests.shift().respond(
+    200,
+    null,
+    '#EXTM3U\n' +
+    '#EXT-X-TARGETDURATION:15\n' +
+    '#EXT-X-KEY:METHOD=AES-128,URI="http://example.com/keys/key.php"\n' +
+    '#EXTINF:2.833,\n' +
+    'http://example.com/000001.ts\n' +
+    '#EXT-X-ENDLIST\n'
+  );
+  QUnit.equal(loader.media().segments[0].key.resolvedUri, 'http://example.com/keys/key.php',
+        'resolved absolute path for key URI');
+});
+
 QUnit.test(
 'jumps to HAVE_METADATA when initialized with a live media playlist',
 function() {

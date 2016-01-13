@@ -1805,6 +1805,75 @@ function() {
         'blacklisted playlist');
 });
 
+QUnit.test('seeking should abort an outstanding key request and create a new one', function() {
+  this.player.src({
+    src: 'https://example.com/encrypted.m3u8',
+    type: 'application/vnd.apple.mpegurl'
+  });
+  Helper.openMediaSource(this.player);
+
+  this.requests.shift().respond(200, null,
+                                '#EXTM3U\n' +
+                                '#EXT-X-TARGETDURATION:15\n' +
+                                '#EXT-X-KEY:METHOD=AES-128,URI="keys/key.php"\n' +
+                                '#EXTINF:9,\n' +
+                                'http://media.example.com/fileSequence1.ts\n' +
+                                '#EXT-X-KEY:METHOD=AES-128,URI="keys/key2.php"\n' +
+                                '#EXTINF:9,\n' +
+                                'http://media.example.com/fileSequence2.ts\n' +
+                                '#EXT-X-ENDLIST\n');
+  Helper.standardXHRResponse(this.requests.pop()); // segment 1
+
+  this.player.currentTime(11);
+  this.clock.tick(1);
+  QUnit.ok(this.requests[0].aborted, 'the key XHR should be aborted');
+  this.requests.shift(); // aborted key 1
+
+  QUnit.equal(this.requests.length, 2, 'requested the new key');
+  QUnit.equal(this.requests[0].url,
+              'https://example.com/' +
+              this.player.tech_.hls.playlists.media().segments[1].key.uri,
+              'urls should match');
+});
+
+QUnit.test('switching playlists with an outstanding key request aborts request and loads segment',
+     function() {
+  let keyXhr;
+  let media = '#EXTM3U\n' +
+      '#EXT-X-MEDIA-SEQUENCE:5\n' +
+      '#EXT-X-KEY:METHOD=AES-128,URI="https://priv.example.com/key.php?r=52"\n' +
+      '#EXTINF:2.833,\n' +
+      'http://media.example.com/fileSequence52-A.ts\n' +
+      '#EXTINF:15.0,\n' +
+      'http://media.example.com/fileSequence52-B.ts\n' +
+      '#EXT-X-ENDLIST\n';
+  this.player.src({
+    src: 'https://example.com/master.m3u8',
+    type: 'application/vnd.apple.mpegurl'
+  });
+  Helper.openMediaSource(this.player);
+  this.player.tech_.trigger('play');
+
+  // master playlist
+  Helper.standardXHRResponse(this.requests.shift());
+  // media playlist
+  this.requests.shift().respond(200, null, media);
+  // first segment of the original media playlist
+  Helper.standardXHRResponse(this.requests.pop());
+
+  QUnit.equal(this.requests.length, 1, 'key request only one outstanding');
+  keyXhr = this.requests.shift();
+  QUnit.ok(!keyXhr.aborted, 'key request outstanding');
+
+  this.player.tech_.hls.playlists.trigger('mediachange');
+
+  QUnit.ok(keyXhr.aborted, 'key request aborted');
+  QUnit.equal(this.requests.length, 2, 'loaded key and segment');
+  QUnit.equal(this.requests[0].url, 'https://priv.example.com/key.php?r=52', 'requested the key');
+  QUnit.equal(this.requests[1].url, 'http://media.example.com/fileSequence52-A.ts',
+              'requested the segment');
+});
+
 QUnit.test('does not download segments if preload option set to none', function() {
   this.player.preload('none');
   this.player.src({
