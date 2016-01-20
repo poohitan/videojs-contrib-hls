@@ -35,10 +35,10 @@ export default class Parser extends Stream {
     let key;
     let noop = function() {};
     let defaultMediaGroups = {
-      AUDIO: {},
-      VIDEO: {},
+      'AUDIO': {},
+      'VIDEO': {},
       'CLOSED-CAPTIONS': {},
-      SUBTITLES: {}
+      'SUBTITLES': {}
     };
 
     // the manifest is empty until the parse stream begins delivering data
@@ -203,11 +203,12 @@ export default class Parser extends Stream {
               }
 
               // find the media group, creating defaults as necessary
-              this.manifest.mediaGroups[entry.attributes.TYPE][entry.attributes['GROUP-ID']] =
-                this.manifest.mediaGroups[entry.attributes.TYPE][entry.attributes['GROUP-ID']] ||
-                {};
-              mediaGroup =
-                this.manifest.mediaGroups[entry.attributes.TYPE][entry.attributes['GROUP-ID']];
+              this.manifest.mediaGroups[entry.attributes.TYPE]
+                [entry.attributes['GROUP-ID']] =
+                  this.manifest.mediaGroups[entry.attributes.TYPE]
+                    [entry.attributes['GROUP-ID']] || {};
+              mediaGroup = this.manifest.mediaGroups[entry.attributes.TYPE]
+                [entry.attributes['GROUP-ID']];
 
               // collect the rendition metadata
               rendition = {

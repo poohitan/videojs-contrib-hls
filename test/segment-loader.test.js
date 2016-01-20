@@ -23,7 +23,7 @@ const playlistWithDuration = function(time, conf) {
       duration: 10
     });
     if (isEncrypted) {
-      result.segments[i]['key'] = {
+      result.segments[i].key = {
         uri: i + '-key.php',
         resolvedUri: i + '-key.php'
       };
@@ -63,6 +63,7 @@ QUnit.module('Segment Loader', {
 });
 
 QUnit.test('fails without required initialization options', function() {
+  /* eslint-disable no-new */
   QUnit.throws(function() {
     new SegmentLoader();
   }, 'requires options');
@@ -74,6 +75,7 @@ QUnit.test('fails without required initialization options', function() {
       currentTime() {}
     });
   }, 'requires a media source');
+  /* eslint-enable */
 });
 
 QUnit.test('load waits until a playlist is specified to proceed', function() {
@@ -299,7 +301,7 @@ QUnit.test('cancels outstanding requests on abort', function() {
   loader.playlist(playlistWithDuration(20));
   loader.load();
   loader.xhr_.segmentXhr.onreadystatechange = function() {
-    throw 'onreadystatechange should not be called';
+    throw new Error('onreadystatechange should not be called');
   };
 
   loader.abort();
@@ -536,7 +538,7 @@ QUnit.test('cancels outstanding key request on abort', function() {
   loader.playlist(playlistWithDuration(20, {isEncrypted: true}));
   loader.load();
   loader.xhr_.keyXhr.onreadystatechange = function() {
-    throw 'onreadystatechange should not be called';
+    throw new Error('onreadystatechange should not be called');
   };
 
   QUnit.equal(this.requests.length, 2, 'requested a segment and key');
@@ -620,12 +622,14 @@ QUnit.test('the key is saved to the segment in the correct format', function() {
   segmentInfo = loader.pendingSegment_;
   segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
 
-  QUnit.deepEqual(segment.key.bytes, new Uint32Array([0, 0x01000000, 0x02000000, 0x03000000]),
+  QUnit.deepEqual(segment.key.bytes,
+                  new Uint32Array([0, 0x01000000, 0x02000000, 0x03000000]),
                   'passed the specified segment key');
 });
 
-QUnit.test('supplies media sequence of current segment as the IV by default, if no IV is specified',
-           function() {
+QUnit.test('supplies media sequence of current segment as the IV by default, if no IV ' +
+           'is specified',
+function() {
   let keyRequest;
   let segmentRequest;
   let segment;
@@ -655,7 +659,6 @@ QUnit.test('supplies media sequence of current segment as the IV by default, if 
 QUnit.test('segment with key has decrypted bytes appended during processing', function() {
   let keyRequest;
   let segmentRequest;
-  let didCallHandleSegment;
 
   // stop processing so we can examine segment info
   loader.handleSegment_ = function() {};
@@ -680,8 +683,9 @@ QUnit.test('segment with key has decrypted bytes appended during processing', fu
   QUnit.ok(loader.pendingSegment_.bytes, 'decrypted bytes in segment');
 });
 
-QUnit.test('calling load with an encrypted segment waits for both key and segment before processing',
-     function() {
+QUnit.test('calling load with an encrypted segment waits for both key and segment ' +
+           'before processing',
+function() {
   let keyRequest;
   let segmentRequest;
 
@@ -749,16 +753,22 @@ QUnit.skip('cleans up the buffer when loading live segments', function() {
 
   this.player.tech_.hls.playlists.trigger('loadedmetadata');
   this.player.tech_.trigger('canplay');
-  this.player.tech_.paused = function() { return false; };
-  this.player.tech_.readyState = function() {return 1;};
+  this.player.tech_.paused = function() {
+    return false;
+  };
+  this.player.tech_.readyState = function() {
+    return 1;
+  };
   this.player.tech_.trigger('play');
 
   this.clock.tick(1);
   Helper.standardXHRResponse(this.requests[1]);
 
-  QUnit.strictEqual(this.requests[0].url, 'liveStart30sBefore.m3u8', 'master playlist requested');
+  QUnit.strictEqual(this.requests[0].url, 'liveStart30sBefore.m3u8',
+                    'master playlist requested');
   QUnit.equal(removes.length, 1, 'remove called');
-  QUnit.deepEqual(removes[0], [0, seekable.start(0)], 'remove called with the right range');
+  QUnit.deepEqual(removes[0], [0, seekable.start(0)],
+                  'remove called with the right range');
 });
 
 QUnit.skip('cleans up the buffer when loading VOD segments', function() {
@@ -786,7 +796,8 @@ QUnit.skip('cleans up the buffer when loading VOD segments', function() {
   Helper.standardXHRResponse(this.requests[1]);
   Helper.standardXHRResponse(this.requests[2]);
 
-  QUnit.strictEqual(this.requests[0].url, 'manifest/master.m3u8', 'master playlist requested');
+  QUnit.strictEqual(this.requests[0].url, 'manifest/master.m3u8',
+                    'master playlist requested');
   QUnit.strictEqual(this.requests[1].url, Helper.absoluteUrl('manifest/media3.m3u8'),
                     'media playlist requested');
   QUnit.equal(removes.length, 1, 'remove called');

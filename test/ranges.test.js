@@ -31,16 +31,19 @@ QUnit.test('detects time range end-point changed by updates', function() {
 
   edge = Ranges.findSoleUncommonTimeRangesEnd_(createTimeRanges([[5, 10]]),
                                                createTimeRanges([[0, 11]]));
-  QUnit.strictEqual(edge, 11, 'detected a forward addition & ignores a backward addition');
+  QUnit.strictEqual(edge, 11,
+                    'detected a forward addition & ignores a backward addition');
 
   edge = Ranges.findSoleUncommonTimeRangesEnd_(createTimeRanges([[0, 10]]),
                                                createTimeRanges([[0, 9]]));
-  QUnit.strictEqual(edge, null, 'ignores a backwards addition resulting from a shrinking range');
+  QUnit.strictEqual(edge, null,
+                    'ignores a backwards addition resulting from a shrinking range');
 
   edge = Ranges.findSoleUncommonTimeRangesEnd_(createTimeRanges([[0, 10]]),
                                                createTimeRanges([[2, 7]]));
   QUnit.strictEqual(edge, null,
-                    'ignores a forward & backwards addition resulting from a shrinking range');
+                    'ignores a forward & backwards addition resulting from a shrinking ' +
+                    'range');
 
   edge = Ranges.findSoleUncommonTimeRangesEnd_(createTimeRanges([[2, 10]]),
                                                createTimeRanges([[0, 7]]));

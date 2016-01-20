@@ -44,6 +44,7 @@ const MockSourceBuffer = videojs.extend(videojs.EventTarget, {
 
 export const MockMediaSource = function() {
   let mediaSource = new MediaSource();
+
   mediaSource.addSourceBuffer = function(mime) {
     let sourceBuffer = new MockSourceBuffer();
 
@@ -69,8 +70,8 @@ export const useFakeEnvironment = function() {
   xhr = sinon.useFakeXMLHttpRequest();
   videojs.xhr.XMLHttpRequest = xhr;
   requests = [];
-  xhr.onCreate = function(xhr) {
-    requests.push(xhr);
+  xhr.onCreate = function(createdXhr) {
+    requests.push(createdXhr);
   };
   return {
     clock,

@@ -9,9 +9,10 @@ QUnit.module('Source Updater', {
 });
 
 QUnit.test('waits for sourceopen to create a source buffer', function() {
-  new SourceUpdater(this.mediaSource, 'video/mp2t');
+  new SourceUpdater(this.mediaSource, 'video/mp2t'); // eslint-disable-line no-new
 
-  QUnit.equal(this.mediaSource.sourceBuffers.length, 0, 'waited to create the source buffer');
+  QUnit.equal(this.mediaSource.sourceBuffers.length, 0,
+              'waited to create the source buffer');
 
   this.mediaSource.trigger('sourceopen');
 
@@ -44,7 +45,7 @@ QUnit.test('runs the completion callback when updateend fires', function() {
     updateends++;
   });
   updater.appendBuffer(new Uint8Array([2, 3, 4]), function() {
-    throw 'Wrong completion callback invoked!';
+    throw new Error('Wrong completion callback invoked!');
   });
 
   QUnit.equal(updateends, 0, 'no completions yet');
@@ -80,20 +81,24 @@ QUnit.test('runs only one callback at a time', function() {
 
   updater.appendBuffer(new Uint8Array([2]));
   QUnit.equal(sourceBuffer.updates_.length, 1, 'queued some updates');
-  QUnit.deepEqual(sourceBuffer.updates_[0].append, new Uint8Array([0]), 'ran the first update');
+  QUnit.deepEqual(sourceBuffer.updates_[0].append, new Uint8Array([0]),
+                  'ran the first update');
 
   sourceBuffer.trigger('updateend');
   QUnit.equal(sourceBuffer.updates_.length, 2, 'queued some updates');
-  QUnit.deepEqual(sourceBuffer.updates_[1].append, new Uint8Array([1]), 'ran the second update');
+  QUnit.deepEqual(sourceBuffer.updates_[1].append, new Uint8Array([1]),
+                  'ran the second update');
 
   updater.appendBuffer(new Uint8Array([3]));
   sourceBuffer.trigger('updateend');
   QUnit.equal(sourceBuffer.updates_.length, 3, 'queued the updates');
-  QUnit.deepEqual(sourceBuffer.updates_[2].append, new Uint8Array([2]), 'ran the third update');
+  QUnit.deepEqual(sourceBuffer.updates_[2].append, new Uint8Array([2]),
+                  'ran the third update');
 
   sourceBuffer.trigger('updateend');
   QUnit.equal(sourceBuffer.updates_.length, 4, 'finished the updates');
-  QUnit.deepEqual(sourceBuffer.updates_[3].append, new Uint8Array([3]), 'ran the fourth update');
+  QUnit.deepEqual(sourceBuffer.updates_[3].append, new Uint8Array([3]),
+                  'ran the fourth update');
 });
 
 QUnit.test('runs updates immediately if possible', function() {
@@ -104,7 +109,8 @@ QUnit.test('runs updates immediately if possible', function() {
   sourceBuffer = this.mediaSource.sourceBuffers[0];
   updater.appendBuffer(new Uint8Array([0]));
   QUnit.equal(sourceBuffer.updates_.length, 1, 'ran an update');
-  QUnit.deepEqual(sourceBuffer.updates_[0].append, new Uint8Array([0]), 'appended the bytes');
+  QUnit.deepEqual(sourceBuffer.updates_[0].append, new Uint8Array([0]),
+                  'appended the bytes');
 });
 
 QUnit.test('supports buffered', function() {

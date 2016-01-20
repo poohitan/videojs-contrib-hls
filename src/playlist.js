@@ -248,7 +248,7 @@ export const getMediaIndexForTime_ = function(playlist, time, expired) {
 
   // use the bounds we just found and playlist information to
   // estimate the segment that contains the time we are looking for
-  if (startIndex !== undefined) {
+  if (typeof startIndex !== 'undefined') {
     // We have a known-start point that is before our desired time so
     // walk from that point forwards
     time = time - knownStart;
@@ -273,7 +273,7 @@ export const getMediaIndexForTime_ = function(playlist, time, expired) {
 
     // We _still_ haven't found a segment so load the last one
     return lastSegment;
-  } else if (endIndex !== undefined) {
+  } else if (typeof endIndex !== 'undefined') {
     // We _only_ have a known-end point that is after our desired time so
     // walk from that point backwards
     time = knownEnd - time;
@@ -289,31 +289,29 @@ export const getMediaIndexForTime_ = function(playlist, time, expired) {
     // We haven't found a segment so load the first one if time is zero
     if (time === 0) {
       return 0;
-    } else {
-      return -1;
     }
-  } else {
-    // We known nothing so walk from the front of the playlist,
-    // subtracting durations until we find a segment that contains
-    // time and return it
-    time = time - expired;
-
-    if (time < 0) {
-      return -1;
-    }
-
-    for (i = 0; i < numSegments; i++) {
-      segment = playlist.segments[i];
-      time -= segment.duration;
-      if (time < 0) {
-        return i;
-      }
-    }
-    // We are out of possible candidates so load the last one...
-    // The last one is the least likely to overlap a buffer and therefore
-    // the one most likely to tell us something about the timeline
-    return lastSegment;
+    return -1;
   }
+  // We known nothing so walk from the front of the playlist,
+  // subtracting durations until we find a segment that contains
+  // time and return it
+  time = time - expired;
+
+  if (time < 0) {
+    return -1;
+  }
+
+  for (i = 0; i < numSegments; i++) {
+    segment = playlist.segments[i];
+    time -= segment.duration;
+    if (time < 0) {
+      return i;
+    }
+  }
+  // We are out of possible candidates so load the last one...
+  // The last one is the least likely to overlap a buffer and therefore
+  // the one most likely to tell us something about the timeline
+  return lastSegment;
 };
 
 export default {

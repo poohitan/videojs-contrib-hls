@@ -51,7 +51,8 @@ export default videojs.extend(null, {
 
   /**
    * Queue an update to append an ArrayBuffer.
-   * @see http://www.w3.org/TR/media-source/#widl-SourceBuffer-appendBuffer-void-ArrayBuffer-data
+   * @see http://www.w3.org/TR/media-source/
+   *      #widl-SourceBuffer-appendBuffer-void-ArrayBuffer-data
    */
   appendBuffer(bytes, done) {
     this.queueCallback_(function() {
@@ -82,7 +83,8 @@ export default videojs.extend(null, {
 
   /**
    * Queue an update to remove a time range from the buffer.
-   * @see http://www.w3.org/TR/media-source/#widl-SourceBuffer-remove-void-double-start-unrestricted-double-end
+   * @see http://www.w3.org/TR/media-source/
+   *      #widl-SourceBuffer-remove-void-double-start-unrestricted-double-end
    */
   remove(start, end) {
     this.queueCallback_(function() {
@@ -91,7 +93,7 @@ export default videojs.extend(null, {
   },
 
   timestampOffset(offset) {
-    if (offset !== undefined) {
+    if (typeof offset !== 'undefined') {
       this.queueCallback_(function() {
         this.sourceBuffer_.timestampOffset = offset;
       });

@@ -342,8 +342,10 @@ QUnit.test('updates the segment loader on live playlist refreshes', function() {
   Helper.openMediaSource(this.player, this.clock);
   hls = this.player.tech_.hls;
 
-  Helper.standardXHRResponse(this.requests.shift()); // master
-  Helper.standardXHRResponse(this.requests.shift()); // media
+  // master
+  Helper.standardXHRResponse(this.requests.shift());
+  // media
+  Helper.standardXHRResponse(this.requests.shift());
   hls.segments.playlist = function(update) {
     updates.push(update);
   };
@@ -1496,7 +1498,8 @@ QUnit.test('resets the switching algorithm if a request times out', function() {
   Helper.standardXHRResponse(this.requests.shift());
   // simulate a segment timeout
   this.requests[0].timedout = true;
-  this.requests.shift().abort(); // segment
+  // segment
+  this.requests.shift().abort();
 
   Helper.standardXHRResponse(this.requests.shift());
 
@@ -1806,7 +1809,8 @@ function() {
         'blacklisted playlist');
 });
 
-QUnit.test('seeking should abort an outstanding key request and create a new one', function() {
+QUnit.test('seeking should abort an outstanding key request and create a new one',
+function() {
   this.player.src({
     src: 'https://example.com/encrypted.m3u8',
     type: 'application/vnd.apple.mpegurl'
@@ -1823,12 +1827,14 @@ QUnit.test('seeking should abort an outstanding key request and create a new one
                                 '#EXTINF:9,\n' +
                                 'http://media.example.com/fileSequence2.ts\n' +
                                 '#EXT-X-ENDLIST\n');
-  Helper.standardXHRResponse(this.requests.pop()); // segment 1
+  // segment 1
+  Helper.standardXHRResponse(this.requests.pop());
 
   this.player.currentTime(11);
   this.clock.tick(1);
   QUnit.ok(this.requests[0].aborted, 'the key XHR should be aborted');
-  this.requests.shift(); // aborted key 1
+  // aborted key 1
+  this.requests.shift();
 
   QUnit.equal(this.requests.length, 2, 'requested the new key');
   QUnit.equal(this.requests[0].url,
@@ -1837,8 +1843,8 @@ QUnit.test('seeking should abort an outstanding key request and create a new one
               'urls should match');
 });
 
-QUnit.test('switching playlists with an outstanding key request aborts request and loads segment',
-     function() {
+QUnit.test('switching playlists with an outstanding key request aborts request and ' +
+           'loads segment', function() {
   let keyXhr;
   let media = '#EXTM3U\n' +
       '#EXT-X-MEDIA-SEQUENCE:5\n' +
@@ -1871,7 +1877,8 @@ QUnit.test('switching playlists with an outstanding key request aborts request a
 
   QUnit.ok(keyXhr.aborted, 'key request aborted');
   QUnit.equal(this.requests.length, 2, 'loaded key and segment');
-  QUnit.equal(this.requests[0].url, 'https://priv.example.com/key.php?r=52', 'requested the key');
+  QUnit.equal(this.requests[0].url, 'https://priv.example.com/key.php?r=52',
+              'requested the key');
   QUnit.equal(this.requests[1].url, 'http://media.example.com/fileSequence52-A.ts',
               'requested the segment');
 });
@@ -1918,17 +1925,21 @@ QUnit.test('updates the segment loader on media changes', function() {
   hls.mediaSource.trigger('sourceopen');
 
   hls.bandwidth = 1;
-  Helper.standardXHRResponse(this.requests.shift()); // master
-  Helper.standardXHRResponse(this.requests.shift()); // media
+  // master
+  Helper.standardXHRResponse(this.requests.shift());
+  // media
+  Helper.standardXHRResponse(this.requests.shift());
   hls.segments.playlist = function(update) {
     updates.push(update);
   };
 
   // downloading the new segment will update bandwidth and cause a
   // playlist change
-  Helper.standardXHRResponse(this.requests.shift()); // segment 0
+  // segment 0
+  Helper.standardXHRResponse(this.requests.shift());
   hls.mediaSource.sourceBuffers[0].trigger('updateend');
-  Helper.standardXHRResponse(this.requests.shift()); // media
+  // media
+  Helper.standardXHRResponse(this.requests.shift());
   QUnit.equal(updates.length, 1, 'updated the segment list');
 });
 
@@ -1939,8 +1950,10 @@ QUnit.test('aborts all in-flight work when disposed', function() {
   }, this.tech);
 
   hls.mediaSource.trigger('sourceopen');
-  Helper.standardXHRResponse(this.requests.shift()); // master
-  Helper.standardXHRResponse(this.requests.shift()); // media
+  // master
+  Helper.standardXHRResponse(this.requests.shift());
+  // media
+  Helper.standardXHRResponse(this.requests.shift());
 
   hls.dispose();
   QUnit.ok(this.requests[0].aborted, 'aborted the old segment request');
@@ -1962,14 +1975,18 @@ QUnit.test('selects a playlist after segment downloads', function() {
     return hls.playlists.master.playlists[0];
   };
 
-  Helper.standardXHRResponse(this.requests[0]); // master
-  Helper.standardXHRResponse(this.requests[1]); // media
+  // master
+  Helper.standardXHRResponse(this.requests[0]);
+  // media
+  Helper.standardXHRResponse(this.requests[1]);
 
-  Helper.standardXHRResponse(this.requests[2]); // segment
+  // segment
+  Helper.standardXHRResponse(this.requests[2]);
   hls.mediaSource.sourceBuffers[0].trigger('updateend');
   QUnit.strictEqual(calls, 2, 'selects after the initial segment');
 
-  Helper.standardXHRResponse(this.requests[3]); // segment
+  // segment
+  Helper.standardXHRResponse(this.requests[3]);
   hls.mediaSource.sourceBuffers[0].trigger('updateend');
   QUnit.strictEqual(calls, 3, 'selects after additional segments');
 });
@@ -1984,8 +2001,10 @@ QUnit.test('updates the duration after switching playlists', function() {
   hls.mediaSource.trigger('sourceopen');
 
   hls.bandwidth = 1e20;
-  Helper.standardXHRResponse(this.requests[0]); // master
-  Helper.standardXHRResponse(this.requests[1]); // media3
+  // master
+  Helper.standardXHRResponse(this.requests[0]);
+  // media3
+  Helper.standardXHRResponse(this.requests[1]);
 
   hls.selectPlaylist = function() {
     selectedPlaylist = true;
@@ -1999,9 +2018,11 @@ QUnit.test('updates the duration after switching playlists', function() {
     return hls.playlists.master.playlists[1];
   };
 
-  Helper.standardXHRResponse(this.requests[2]); // segment 0
+  // segment 0
+  Helper.standardXHRResponse(this.requests[2]);
   hls.mediaSource.sourceBuffers[0].trigger('updateend');
-  Helper.standardXHRResponse(this.requests[3]); // media1
+  // media1
+  Helper.standardXHRResponse(this.requests[3]);
   QUnit.ok(selectedPlaylist, 'selected playlist');
   QUnit.ok(hls.mediaSource.duration !== 0, 'updates the duration');
 });
@@ -2016,18 +2037,23 @@ QUnit.test('downloads additional playlists if required', function() {
   hls.mediaSource.trigger('sourceopen');
 
   hls.bandwidth = 1;
-  Helper.standardXHRResponse(this.requests[0]); // master
-  Helper.standardXHRResponse(this.requests[1]); // media
+  // master
+  Helper.standardXHRResponse(this.requests[0]);
+  // media
+  Helper.standardXHRResponse(this.requests[1]);
   originalPlaylist = hls.playlists.media();
 
   // the playlist selection is revisited after a new segment is downloaded
   this.requests[2].bandwidth = 3000000;
-  Helper.standardXHRResponse(this.requests[2]); // segment
+  // segment
+  Helper.standardXHRResponse(this.requests[2]);
   hls.mediaSource.sourceBuffers[0].trigger('updateend');
 
-  Helper.standardXHRResponse(this.requests[3]); // new media
+  // new media
+  Helper.standardXHRResponse(this.requests[3]);
 
-  QUnit.ok((/manifest\/media\d+.m3u8$/).test(this.requests[3].url), 'made a playlist request');
+  QUnit.ok((/manifest\/media\d+.m3u8$/).test(this.requests[3].url),
+           'made a playlist request');
   QUnit.notEqual(originalPlaylist.resolvedUri,
            hls.playlists.media().resolvedUri,
            'a new playlists was selected');
@@ -2046,21 +2072,26 @@ function() {
   hls.mediaSource.trigger('sourceopen');
   sourceBuffer = hls.mediaSource.sourceBuffers[0];
 
-  hls.bandwidth = 1; // make sure we stay on the lowest variant
-  Helper.standardXHRResponse(this.requests.shift()); // master
-  Helper.standardXHRResponse(this.requests.shift()); // media1
+  // make sure we stay on the lowest variant
+  hls.bandwidth = 1;
+  // master
+  Helper.standardXHRResponse(this.requests.shift());
+  // media1
+  Helper.standardXHRResponse(this.requests.shift());
 
   // force a playlist switch
   hls.playlists.media('media3.m3u8');
 
-  Helper.standardXHRResponse(this.requests.shift()); // segment 0
+  // segment 0
+  Helper.standardXHRResponse(this.requests.shift());
   sourceBuffer.trigger('updateend');
 
   QUnit.equal(this.requests.length, 1, 'only the playlist request outstanding');
   this.clock.tick(10 * 1000);
   QUnit.equal(this.requests.length, 1, 'delays segment fetching');
 
-  Helper.standardXHRResponse(this.requests.shift()); // media3
+  // media3
+  Helper.standardXHRResponse(this.requests.shift());
   this.clock.tick(10 * 1000);
   QUnit.equal(this.requests.length, 1, 'resumes segment fetching');
 });

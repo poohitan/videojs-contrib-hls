@@ -137,9 +137,8 @@ QUnit.test('recognizes absolute URIs and requests them unmodified', function() {
                                 '#EXTM3U\n' +
                                 '#EXT-X-STREAM-INF:\n' +
                                 'http://example.com/video/media.m3u8\n');
-  QUnit.equal(loader.master.playlists[0].resolvedUri, 'http://example.com/video/media.m3u8',
-              'resolved media URI');
-
+  QUnit.equal(loader.master.playlists[0].resolvedUri,
+              'http://example.com/video/media.m3u8', 'resolved media URI');
 
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
@@ -222,8 +221,8 @@ QUnit.test('recognizes absolute key URLs', function() {
     'http://example.com/000001.ts\n' +
     '#EXT-X-ENDLIST\n'
   );
-  QUnit.equal(loader.media().segments[0].key.resolvedUri, 'http://example.com/keys/key.php',
-        'resolved absolute path for key URI');
+  QUnit.equal(loader.media().segments[0].key.resolvedUri,
+              'http://example.com/keys/key.php', 'resolved absolute path for key URI');
 });
 
 QUnit.test(

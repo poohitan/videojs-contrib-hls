@@ -15,7 +15,9 @@ import SourceUpdater from './source-updater';
 import xhr from './xhr';
 import Decrypter from './decrypter/decrypter';
 
-const CHECK_BUFFER_DELAY = 500; // ms
+// in ms
+const CHECK_BUFFER_DELAY = 500;
+
 // the desired length of video to maintain in the buffer, in seconds
 export const GOAL_BUFFER_LENGTH = 30;
 
@@ -46,7 +48,7 @@ export default videojs.extend(videojs.EventTarget, {
     this.mediaSource_ = settings.mediaSource;
     this.withCredentials_ = settings.withCredentials;
     this.checkBufferTimeout_ = null;
-    this.error_ = undefined;
+    this.error_ = void 0;
     this.timestampOffset_ = 0;
     this.xhr_ = null;
     this.pendingSegment_ = null;
@@ -71,7 +73,7 @@ export default videojs.extend(videojs.EventTarget, {
     }
   },
   error(error) {
-    if (error !== undefined) {
+    if (typeof error !== 'undefined') {
       this.error_ = error;
     }
 
@@ -365,8 +367,8 @@ export default videojs.extend(videojs.EventTarget, {
 
       // if the media sequence is greater than 2^32, the IV will be incorrect
       // assuming 10s segments, that would be about 1300 years
-      segment.key.iv = segment.key.iv ||
-        new Uint32Array([0, 0, 0, segmentInfo.mediaIndex + segmentInfo.playlist.mediaSequence]);
+      segment.key.iv = segment.key.iv || new Uint32Array(
+        [0, 0, 0, segmentInfo.mediaIndex + segmentInfo.playlist.mediaSequence]);
     }
 
     if (!this.xhr_.segmentXhr && !this.xhr_.keyXhr) {
@@ -387,13 +389,16 @@ export default videojs.extend(videojs.EventTarget, {
     if (segment.key) {
       // this is an encrypted segment
       // incrementally decrypt the segment
+      /* eslint-disable no-new, handle-callback-err */
       new Decrypter(segmentInfo.encryptedBytes,
                     segment.key.bytes,
                     segment.key.iv,
                     (function(err, bytes) {
+                      // err always null
                       segmentInfo.bytes = bytes;
                       this.handleSegment_();
                     }).bind(this));
+      /* eslint-enable */
     } else {
       this.handleSegment_();
     }
@@ -458,7 +463,8 @@ export default videojs.extend(videojs.EventTarget, {
     let timelineUpdate;
 
     currentMediaIndex = segmentInfo.mediaIndex;
-    currentMediaIndex += segmentInfo.playlist.mediaSequence - this.playlist_.mediaSequence;
+    currentMediaIndex +=
+      segmentInfo.playlist.mediaSequence - this.playlist_.mediaSequence;
     segment = segmentInfo.playlist.segments[currentMediaIndex];
 
     if (!segment) {
