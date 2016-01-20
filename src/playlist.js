@@ -207,7 +207,7 @@ export const seekable = function(playlist) {
  * @return {number} The number of the media segment that contains
  * that time position.
  */
-export const getMediaIndexForTime = function(playlist, time, expired) {
+export const getMediaIndexForTime_ = function(playlist, time, expired) {
   let i;
   let segment;
   let originalTime = time;
@@ -316,9 +316,8 @@ export const getMediaIndexForTime = function(playlist, time, expired) {
   }
 };
 
-// exports
 export default {
   duration,
   seekable,
-  getMediaIndexForTime_: getMediaIndexForTime
+  getMediaIndexForTime_
 };

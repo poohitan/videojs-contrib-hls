@@ -49,7 +49,9 @@ export default class Parser extends Stream {
 
     // update the manifest with the m3u8 entry from the parse stream
     this.parseStream.on('data', function(entry) {
-      let mediaGroup, rendition;
+      let mediaGroup;
+      let rendition;
+
       ({
         tag() {
           // switch based on the tag type

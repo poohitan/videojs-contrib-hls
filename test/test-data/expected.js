@@ -192,6 +192,105 @@ module.exports = {
   "discontinuitySequence": 0,
   "discontinuityStarts": []
 },
+  "alternateAudio": {
+    allowCache: true,
+    discontinuityStarts: [],
+    mediaGroups: {
+      // TYPE
+      AUDIO: {
+        // GROUP-ID
+        "audio": {
+          // NAME
+          "English": {
+            language: 'eng',
+            autoselect: true,
+            default: true,
+            uri: "eng/prog_index.m3u8"
+          },
+          // NAME
+          "Français": {
+            language: "fre",
+            autoselect: true,
+            default: false,
+            uri: "fre/prog_index.m3u8"
+          },
+          // NAME
+          "Espanol": {
+            language: "sp",
+            autoselect: true,
+            default: false,
+            uri: "sp/prog_index.m3u8"
+          }
+        }
+      },
+      VIDEO: {},
+      "CLOSED-CAPTIONS": {},
+      SUBTITLES: {}
+    },
+    playlists: [{
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 195023,
+        CODECS: "avc1.42e00a,mp4a.40.2",
+        AUDIO: 'audio'
+      },
+      uri: "lo/prog_index.m3u8"
+    }, {
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 591680,
+        CODECS: "avc1.42e01e,mp4a.40.2",
+        AUDIO: 'audio'
+      },
+      uri: "hi/prog_index.m3u8"
+    }]
+},
+  "alternateVideo": {
+    allowCache: true,
+    discontinuityStarts: [],
+    mediaGroups: {
+      AUDIO: {
+        aac: {
+          English: {
+            autoselect: true,
+            default: true,
+            language: "eng",
+            uri: "eng/prog_index.m3u8"
+          }
+        }
+      },
+      VIDEO: {
+        "500kbs": {
+          Angle1: {
+            autoselect: true,
+            default: true
+          },
+          Angle2: {
+            autoselect: true,
+            default: false,
+            uri: "Angle2/500kbs/prog_index.m3u8"
+          },
+          Angle3: {
+            autoselect: true,
+            default: false,
+            uri: "Angle3/500kbs/prog_index.m3u8"
+          }
+        }
+      },
+      "CLOSED-CAPTIONS": {},
+      SUBTITLES: {}
+    },
+    playlists: [{
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 754857,
+        CODECS: "mp4a.40.2,avc1.4d401e",
+        AUDIO: "aac",
+        VIDEO: "500kbs"
+      },
+      uri: "Angle1/500kbs/prog_index.m3u8"
+    }]
+},
   "brightcove": {
   "allowCache": true,
   "playlists": [
@@ -236,7 +335,13 @@ module.exports = {
       "uri": "http://c.brightcove.com/services/mobile/streaming/index/rendition.m3u8?assetId=1824687660001&videoId=1824650741001"
     }
   ],
-  "discontinuityStarts": []
+  "discontinuityStarts": [],
+  "mediaGroups": {
+    "VIDEO": {},
+    "AUDIO": {},
+    "CLOSED-CAPTIONS": {},
+    "SUBTITLES": {}
+  }
 },
   "byteRange": {
   "allowCache": true,
@@ -629,7 +734,13 @@ module.exports = {
       "uri": "http://c.brightcove.com/services/mobile/streaming/index/rendition.m3u8?assetId=1824687660001&videoId=1824650741001"
     }
   ],
-  "discontinuityStarts": []
+  "discontinuityStarts": [],
+  "mediaGroups": {
+    "VIDEO": {},
+    "AUDIO": {},
+    "CLOSED-CAPTIONS": {},
+    "SUBTITLES": {}
+  }
 },
   "encrypted": {
   "allowCache": true,
@@ -1276,7 +1387,13 @@ module.exports = {
       "uri": "media3.m3u8"
     }
   ],
-  "discontinuityStarts": []
+  "discontinuityStarts": [],
+  "mediaGroups": {
+    "VIDEO": {},
+    "AUDIO": {},
+    "CLOSED-CAPTIONS": {},
+    "SUBTITLES": {}
+  }
 },
   "media": {
   "allowCache": true,
@@ -1449,6 +1566,161 @@ module.exports = {
   ],
   "discontinuitySequence": 0,
   "discontinuityStarts": []
+},
+  "multipleAudioGroups": {
+    allowCache: true,
+    discontinuityStarts: [],
+    mediaGroups: {
+      AUDIO: {
+        "audio-lo": {
+          "English": {
+            autoselect: true,
+            default: true,
+            language: "eng",
+            uri: "englo/prog_index.m3u8"
+          },
+          "Français": {
+            autoselect: true,
+            default: false,
+            language: "fre",
+            uri: "frelo/prog_index.m3u8"
+          },
+          "Espanol": {
+            autoselect: true,
+            default: false,
+            language: "sp",
+            uri: "splo/prog_index.m3u8"
+          }
+        },
+        "audio-hi": {
+          "English": {
+            autoselect: true,
+            default: true,
+            language: "eng",
+            uri: "eng/prog_index.m3u8"
+          },
+          "Français": {
+            autoselect: true,
+            default: false,
+            language: "fre",
+            uri: "fre/prog_index.m3u8"
+          },
+          "Espanol": {
+            autoselect: true,
+            default: false,
+            language: "sp",
+            uri: "sp/prog_index.m3u8"
+          }
+        }
+      },
+      VIDEO: {},
+      "CLOSED-CAPTIONS": {},
+      SUBTITLES: {}
+    },
+    playlists: [{
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 195023,
+        CODECS: "mp4a.40.5",
+        AUDIO: "audio-lo",
+      },
+      uri: "lo/prog_index.m3u8"
+    }, {
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 260000,
+        CODECS: "avc1.42e01e,mp4a.40.2",
+        AUDIO: "audio-lo"
+      },
+      uri: "hi/prog_index.m3u8"
+    }, {
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 591680,
+        CODECS: "mp4a.40.2, avc1.64001e",
+        AUDIO: "audio-hi"
+      },
+      uri: "lo/prog_index.m3u8"
+    }, {
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 650000,
+        CODECS: "avc1.42e01e,mp4a.40.2",
+        AUDIO: "audio-hi"
+      },
+      uri: "hi/prog_index.m3u8"
+    }]
+},
+  "multipleVideo": {
+    allowCache: true,
+    discontinuityStarts: [],
+    mediaGroups: {
+      AUDIO: {
+        aac: {
+          English: {
+            autoselect: true,
+            default: true,
+            language: "eng",
+            uri: "eng/prog_index.m3u8"
+          }
+        }
+      },
+      VIDEO: {
+        "200kbs": {
+          Angle1: {
+            autoselect: true,
+            default: true
+          },
+          Angle2: {
+            autoselect: true,
+            default: false,
+            uri: "Angle2/200kbs/prog_index.m3u8"
+          },
+          Angle3: {
+            autoselect: true,
+            default: false,
+            uri: "Angle3/200kbs/prog_index.m3u8"
+          }
+        },
+        "500kbs": {
+          Angle1: {
+            autoselect: true,
+            default: true
+          },
+          Angle2: {
+            autoselect: true,
+            default: false,
+            uri: "Angle2/500kbs/prog_index.m3u8"
+          },
+          Angle3: {
+            autoselect: true,
+            default: false,
+            uri: "Angle3/500kbs/prog_index.m3u8"
+          }
+        }
+      },
+      "CLOSED-CAPTIONS": {},
+      SUBTITLES: {}
+    },
+    playlists: [{
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 300000,
+        CODECS: "mp4a.40.2,avc1.4d401e",
+        AUDIO: "aac",
+        VIDEO: "200kbs"
+      },
+      uri: "Angle1/200kbs/prog_index.m3u"
+    }, {
+      attributes: {
+        "PROGRAM-ID": 1,
+        BANDWIDTH: 754857,
+        CODECS: "mp4a.40.2,avc1.4d401e",
+        AUDIO: "aac",
+        VIDEO: "500kbs"
+      },
+      uri: "Angle1/500kbs/prog_index.m3u8"
+    }]
 },
   "negativeMediaSequence": {
   "allowCache": true,
@@ -1652,7 +1924,13 @@ module.exports = {
       "uri": "media1.m3u8"
     }
   ],
-  "discontinuityStarts": []
+  "discontinuityStarts": [],
+  "mediaGroups": {
+    "VIDEO": {},
+    "AUDIO": {},
+    "CLOSED-CAPTIONS": {},
+    "SUBTITLES": {}
+  }
 },
   "twoMediaSequences": {
   "allowCache": true,

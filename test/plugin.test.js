@@ -4,6 +4,7 @@ import sinon from 'sinon';
 import QUnit from 'qunit';
 import {Hls, HlsSourceHandler, HlsHandler} from '../src/plugin';
 import Helper from './test-data/plugin-helpers.js';
+import {useFakeEnvironment} from './test-helpers';
 
 const Player = videojs.getComponent('Player');
 const Flash = videojs.getComponent('Flash');
@@ -281,13 +282,13 @@ QUnit.test('creates a PlaylistLoader on init', function() {
   );
 });
 
-Qunit.test('creates a SegmentLoader on init', function() {
+QUnit.test('creates a SegmentLoader on init', function() {
   this.player.src({
     src: 'manifest/playlist.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
   Helper.openMediaSource(this.player, this.clock);
-  equal(this.player.tech_.hls.segments.state, 'INIT', 'created a segment loader');
+  QUnit.equal(this.player.tech_.hls.segments.state, 'INIT', 'created a segment loader');
 });
 
 QUnit.test('re-initializes the playlist loader when switching sources', function() {
@@ -333,11 +334,12 @@ QUnit.test('re-initializes the playlist loader when switching sources', function
 QUnit.test('updates the segment loader on live playlist refreshes', function() {
   let updates = [];
   let hls;
+
   this.player.src({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
-  Helper.openMediaSource(this.player);
+  Helper.openMediaSource(this.player, this.clock);
   hls = this.player.tech_.hls;
 
   Helper.standardXHRResponse(this.requests.shift()); // master
@@ -699,22 +701,24 @@ QUnit.test('uses the lowest bitrate if no other is suitable', function() {
               'the lowest bitrate stream is selected');
 });
 
-QUnit.test('selects the correct rendition by playerdimensions', function() {
+QUnit.test('selects the correct rendition by tech dimensions', function() {
   let playlist;
+  let hls;
 
   this.player.src({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
-
   Helper.openMediaSource(this.player, this.clock);
   Helper.standardXHRResponse(this.requests[0]);
 
+  hls = this.player.tech_.hls;
+
   this.player.width(640);
   this.player.height(360);
-  this.player.tech_.hls.bandwidth = 3000000;
+  hls.bandwidth = 3000000;
 
-  playlist = this.player.tech_.hls.selectPlaylist();
+  playlist = hls.selectPlaylist();
 
   QUnit.deepEqual(
     playlist.attributes.RESOLUTION,
@@ -729,9 +733,9 @@ QUnit.test('selects the correct rendition by playerdimensions', function() {
 
   this.player.width(1920);
   this.player.height(1080);
-  this.player.tech_.hls.bandwidth = 3000000;
+  hls.bandwidth = 3000000;
 
-  playlist = this.player.tech_.hls.selectPlaylist();
+  playlist = hls.selectPlaylist();
 
   QUnit.deepEqual(playlist.attributes.RESOLUTION, {
     width: 960,
@@ -745,12 +749,12 @@ QUnit.test('selects the correct rendition by playerdimensions', function() {
 
   this.player.width(396);
   this.player.height(224);
-  playlist = this.player.tech_.hls.selectPlaylist();
+  playlist = hls.selectPlaylist();
 
   QUnit.deepEqual(playlist.attributes.RESOLUTION, {
     width: 396,
     height: 224
-  }, 'should return the correct resolution by this.playerdimensions, if exact match');
+  }, 'should return the correct resolution by player dimensions, if exact match');
   QUnit.equal(
     playlist.attributes.BANDWIDTH,
     440000,
@@ -1044,8 +1048,6 @@ QUnit.test('cancels outstanding XHRs when seeking', function() {
 });
 
 QUnit.test('does not abort segment loading for in-buffer seeking', function() {
-  let mediaIndex;
-
   this.player.src({
     src: 'manifest/media.m3u8',
     type: 'application/vnd.apple.mpegurl'
@@ -1055,7 +1057,6 @@ QUnit.test('does not abort segment loading for in-buffer seeking', function() {
   this.player.tech_.buffered = function() {
     return videojs.createTimeRange(0, 20);
   };
-  mediaIndex = this.player.tech_.hls.mediaIndex;
 
   this.player.tech_.setCurrentTime(11);
   this.clock.tick(1);
@@ -1810,7 +1811,7 @@ QUnit.test('seeking should abort an outstanding key request and create a new one
     src: 'https://example.com/encrypted.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
-  Helper.openMediaSource(this.player);
+  Helper.openMediaSource(this.player, this.clock);
 
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
@@ -1847,11 +1848,12 @@ QUnit.test('switching playlists with an outstanding key request aborts request a
       '#EXTINF:15.0,\n' +
       'http://media.example.com/fileSequence52-B.ts\n' +
       '#EXT-X-ENDLIST\n';
+
   this.player.src({
     src: 'https://example.com/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
-  Helper.openMediaSource(this.player);
+  Helper.openMediaSource(this.player, this.clock);
   this.player.tech_.trigger('play');
 
   // master playlist
@@ -1895,24 +1897,24 @@ QUnit.test('does not download segments if preload option set to none', function(
 });
 
 QUnit.module('HLS:integration', {
-  beforeEach: function() {
-    this.env = videojs.useFakeEnvironment();
-    this.requests = env.requests;
-    this.mse = videojs.useFakeMediaSource()
+  beforeEach() {
+    this.env = useFakeEnvironment();
+    this.requests = this.env.requests;
+    this.clock = sinon.useFakeTimers();
     this.tech = new (videojs.getTech('Html5'))({});
   },
-  afterEach: function() {
+  afterEach() {
     this.env.restore();
-    this.mse.restore();
   }
 });
 
 QUnit.test('updates the segment loader on media changes', function() {
   let updates = [];
-  let hls = videojs.HlsSourceHandler('html5').handleSource({
+  let hls = HlsSourceHandler('html5').handleSource({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
+
   hls.mediaSource.trigger('sourceopen');
 
   hls.bandwidth = 1;
@@ -1931,10 +1933,11 @@ QUnit.test('updates the segment loader on media changes', function() {
 });
 
 QUnit.test('aborts all in-flight work when disposed', function() {
-  let hls = videojs.HlsSourceHandler('html5').handleSource({
+  let hls = HlsSourceHandler('html5').handleSource({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
+
   hls.mediaSource.trigger('sourceopen');
   Helper.standardXHRResponse(this.requests.shift()); // master
   Helper.standardXHRResponse(this.requests.shift()); // media
@@ -1945,12 +1948,15 @@ QUnit.test('aborts all in-flight work when disposed', function() {
 });
 
 QUnit.test('selects a playlist after segment downloads', function() {
-  let calls = 0
-  let hls = videojs.HlsSourceHandler('html5').handleSource({
+  let calls = 0;
+  let hls = HlsSourceHandler('html5').handleSource({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
+
   hls.mediaSource.trigger('sourceopen');
+  // Must mock appendBuffer or else source-updater gets stuck in updating state
+  hls.mediaSource.sourceBuffers[0].appendBuffer = function() {};
   hls.selectPlaylist = function() {
     calls++;
     return hls.playlists.master.playlists[0];
@@ -1970,10 +1976,11 @@ QUnit.test('selects a playlist after segment downloads', function() {
 
 QUnit.test('updates the duration after switching playlists', function() {
   let selectedPlaylist = false;
-  let hls = videojs.HlsSourceHandler('html5').handleSource({
+  let hls = HlsSourceHandler('html5').handleSource({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
+
   hls.mediaSource.trigger('sourceopen');
 
   hls.bandwidth = 1e20;
@@ -2000,12 +2007,12 @@ QUnit.test('updates the duration after switching playlists', function() {
 });
 
 QUnit.test('downloads additional playlists if required', function() {
-  let called = false;
   let originalPlaylist;
-  let hls = videojs.HlsSourceHandler('html5').handleSource({
+  let hls = HlsSourceHandler('html5').handleSource({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
+
   hls.mediaSource.trigger('sourceopen');
 
   hls.bandwidth = 1;
@@ -2031,10 +2038,11 @@ QUnit.test(
 'waits to download new segments until the media playlist is stable',
 function() {
   let sourceBuffer;
-  let hls = videojs.HlsSourceHandler('html5').handleSource({
+  let hls = HlsSourceHandler('html5').handleSource({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
+
   hls.mediaSource.trigger('sourceopen');
   sourceBuffer = hls.mediaSource.sourceBuffers[0];
 

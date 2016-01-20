@@ -120,7 +120,8 @@ QUnit.test('jumps to HAVE_METADATA when initialized with a media playlist', func
 });
 
 QUnit.test('resolves relative media playlist URIs', function() {
-  let loader = new videojs.Hls.PlaylistLoader('master.m3u8');
+  let loader = new PlaylistLoader('master.m3u8');
+
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
                                 '#EXT-X-STREAM-INF:\n' +
@@ -130,7 +131,8 @@ QUnit.test('resolves relative media playlist URIs', function() {
 });
 
 QUnit.test('recognizes absolute URIs and requests them unmodified', function() {
-  let loader = new videojs.Hls.PlaylistLoader('manifest/media.m3u8');
+  let loader = new PlaylistLoader('manifest/media.m3u8');
+
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
                                 '#EXT-X-STREAM-INF:\n' +
@@ -149,7 +151,8 @@ QUnit.test('recognizes absolute URIs and requests them unmodified', function() {
 });
 
 QUnit.test('recognizes domain-relative URLs', function() {
-  let loader = new videojs.Hls.PlaylistLoader('manifest/media.m3u8');
+  let loader = new PlaylistLoader('manifest/media.m3u8');
+
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
                                 '#EXT-X-STREAM-INF:\n' +
@@ -171,7 +174,8 @@ QUnit.test('recognizes domain-relative URLs', function() {
 });
 
 QUnit.test('recognizes key URLs relative to master and playlist', function() {
-  let loader = new videojs.Hls.PlaylistLoader('video/media-encrypted.m3u8');
+  let loader = new PlaylistLoader('video/media-encrypted.m3u8');
+
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
                                 '#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=17\n' +
@@ -196,7 +200,8 @@ QUnit.test('recognizes key URLs relative to master and playlist', function() {
 });
 
 QUnit.test('recognizes absolute key URLs', function() {
-  let loader = new videojs.Hls.PlaylistLoader('video/media-encrypted.m3u8');
+  let loader = new PlaylistLoader('video/media-encrypted.m3u8');
+
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
                                 '#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=17\n' +
@@ -1050,7 +1055,7 @@ QUnit.test('triggers an event when the active media changes', function() {
     'high-0.ts\n' +
     '#EXT-X-ENDLIST\n'
   );
-  QUnit.strictEqual(mediaChangeings, 1, 'still one mediachanging');
+  QUnit.strictEqual(mediaChangings, 1, 'still one mediachanging');
   QUnit.strictEqual(mediaChanges, 1, 'fired a mediachange');
 
   // switch back to an already loaded playlist

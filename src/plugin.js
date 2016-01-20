@@ -6,6 +6,7 @@
 
 import {MediaSource, URL} from 'videojs-contrib-media-sources';
 import PlaylistLoader from './playlist-loader';
+import SegmentLoader from './segment-loader';
 import Playlist from './playlist';
 import m3u8 from './m3u8';
 import {Decrypter, AsyncStream, decrypt} from './decrypter';
@@ -28,14 +29,6 @@ const bandwidthVariance = 1.2;
 // 5 minute blacklist
 const blacklistDuration = 5 * 60 * 1000;
 const Component = videojs.getComponent('Component');
-
-// The amount of time to wait between checking the state of the buffer
-const bufferCheckInterval = 500;
-
-// returns true if a key has failed to download within a certain amount of retries
-const keyFailed = function(key) {
-  return key.retries && key.retries >= 2;
-};
 
 export const Hls = {
   PlaylistLoader,
@@ -163,9 +156,6 @@ if (window.Uint8Array) {
   videojs.getComponent('Flash').registerSourceHandler(HlsSourceHandler('flash'));
 }
 
-// the desired length of video to maintain in the buffer, in seconds
-Hls.GOAL_BUFFER_LENGTH = 30;
-
 HlsHandler.prototype.src = function(src) {
   let oldMediaPlaylist;
 
@@ -188,7 +178,7 @@ HlsHandler.prototype.src = function(src) {
 
   this.tech_.one('canplay', this.setupFirstPlay.bind(this));
 
-  this.playlists = new Hls.PlaylistLoader(this.source_.src, this.options_.withCredentials);
+  this.playlists = new PlaylistLoader(this.source_.src, this.options_.withCredentials);
 
   this.playlists.on('loadedmetadata', function() {
     oldMediaPlaylist = this.playlists.media();
@@ -248,7 +238,7 @@ HlsHandler.prototype.src = function(src) {
     });
   }.bind(this));
 
-  this.segments = new videojs.Hls.SegmentLoader({
+  this.segments = new SegmentLoader({
     currentTime: this.tech_.currentTime.bind(this.tech_),
     mediaSource: this.mediaSource,
     withCredentials: this.options_.withCredentials
@@ -263,12 +253,6 @@ HlsHandler.prototype.src = function(src) {
   this.segments.on('error', function() {
     this.blacklistCurrentPlaylist_(this.segments.error());
   }.bind(this));
-
-  this.segments = new Hls.SegmentLoader({
-    currentTime: this.tech_.currentTime.bind(this.tech_),
-    mediaSource: this.mediaSource,
-    withCredentials: this.options_.withCredentials
-  });
 
   // do nothing if the tech has been disposed already
   // this can occur if someone sets the src in player.ready(), for instance
@@ -720,38 +704,9 @@ HlsHandler.prototype.selectPlaylist = function() {
     sortedPlaylists[0];
 };
 
-const filterBufferedRanges = function(predicate) {
-  return function(time) {
-    let i;
-    let ranges = [];
-    let tech = this.tech_;
-    // !!The order of the next two assignments is important!!
-    // `currentTime` must be equal-to or greater-than the start of the
-    // buffered range. Flash executes out-of-process so, every value can
-    // change behind the scenes from line-to-line. By reading `currentTime`
-    // after `buffered`, we ensure that it is always a current or later
-    // value during playback.
-    let buffered = tech.buffered();
-
-    if (typeof time === 'undefined') {
-      time = tech.currentTime();
-    }
-
-    if (buffered && buffered.length) {
-      // Search for a range containing the play-head
-      for (i = 0; i < buffered.length; i++) {
-        if (predicate(buffered.start(i), buffered.end(i), time)) {
-          ranges.push([buffered.start(i), buffered.end(i)]);
-        }
-      }
-    }
-
-    return videojs.createTimeRanges(ranges);
-  };
-};
-
 HlsHandler.prototype.playlistUriToUrl = function(segmentRelativeUrl) {
   let playListUrl;
+
     // resolve the segment URL relative to the playlist
   if (this.playlists.media().uri === this.source_.src) {
     playListUrl = resolveUrl(this.source_.src, segmentRelativeUrl);

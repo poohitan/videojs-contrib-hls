@@ -117,5 +117,5 @@ export default {
   findRange_: findRange,
   findNextRange_: findNextRange,
   findSoleUncommonTimeRangesEnd_: findSoleUncommonTimeRangesEnd,
-  TIME_FUDGE_FACTOR: TIME_FUDGE_FACTOR
+  TIME_FUDGE_FACTOR
 };
