@@ -1,6 +1,85 @@
 import document from 'global/document';
 import videojs from 'video.js';
 import testDataManifests from './manifests.js';
+import {MediaSource} from 'videojs-contrib-media-sources';
+
+// a SourceBuffer that tracks updates but otherwise is a noop
+export const MockSourceBuffer = videojs.extend(videojs.EventTarget, {
+  constructor() {
+    this.updates_ = [];
+
+    this.on('updateend', function() {
+      this.updating = false;
+    });
+    this.buffered = videojs.createTimeRanges();
+
+    this.duration_ = NaN;
+    Object.defineProperty(this, 'duration', {
+      get() {
+        return this.duration_;
+      },
+      set(duration) {
+        this.updates_.push({
+          duration
+        });
+        this.duration_ = duration;
+        this.updating = true;
+      }
+    });
+  },
+  appendBuffer(bytes) {
+    this.updates_.push({
+      append: bytes
+    });
+    this.updating = true;
+  },
+  remove(start, end) {
+    this.updates_.push({
+      remove: [start, end]
+    });
+    this.updating = true;
+  },
+
+  updating: false
+});
+
+export const MockMediaSource = videojs.extend(videojs.EventTarget, {
+  constructor() {},
+  duration: NaN,
+  seekable: videojs.createTimeRange(),
+  sourceBuffers: [],
+  addSeekableRange_(start, end) {
+    this.seekable = videojs.createTimeRange(start, end);
+  },
+  addSourceBuffer(mime) {
+    return new (videojs.extend(videojs.EventTarget, {
+      constructor() {},
+      abort() {},
+      buffered: videojs.createTimeRange(),
+      appendBuffer() {},
+      remove() {}
+    }))();
+  },
+  // endOfStream triggers an exception if flash isn't available
+  endOfStream(error) {
+    this.error_ = error;
+  },
+  open() {}
+});
+
+export const MockSourceBufferMediaSource = function() {
+  let mediaSource = new MediaSource();
+
+  mediaSource.addSourceBuffer = function(mime) {
+    let sourceBuffer = new MockSourceBuffer();
+
+    sourceBuffer.mimeType_ = mime;
+    this.sourceBuffers.push(sourceBuffer);
+    return sourceBuffer;
+  };
+
+  return mediaSource;
+};
 
 // patch over some methods of the provided tech so it can be tested
 // synchronously with sinon's fake timers
@@ -156,35 +235,32 @@ let Helper = {
       );
   },
   // a no-op MediaSource implementation to allow synchronous testing
-  MockMediaSource: videojs.extend(videojs.EventTarget, {
-    constructor() {},
-    duration: NaN,
-    seekable: videojs.createTimeRange(),
-    addSeekableRange_(start, end) {
-      this.seekable = videojs.createTimeRange(start, end);
-    },
-    addSourceBuffer() {
-      return new (videojs.extend(videojs.EventTarget, {
-        constructor() {},
-        abort() {},
-        buffered: videojs.createTimeRange(),
-        appendBuffer() {},
-        remove() {}
-      }))();
-    },
-    // endOfStream triggers an exception if flash isn't available
-    endOfStream(error) {
-      this.error_ = error;
-    }
-  }),
   URL: {
     createObjectURL() {
       return 'blob:mock-vjs-object-url';
     }
   },
-  testDataManifests
+  testDataManifests,
+  useFakeEnvironment() {
+    this.clock = sinon.useFakeTimers();
+    this.xhr = sinon.useFakeXMLHttpRequest();
+    videojs.xhr.XMLHttpRequest = this.xhr;
+    this.requests = [];
+    this.xhr.onCreate = (createdXhr) => {
+      // force the XHR2 timeout polyfill
+      createdXhr.timeout = null;
+      this.requests.push(createdXhr);
+    };
+    return {
+      clock: this.clock,
+      requests: this.requests
+    }
+  },
+  restoreEnvironment() {
+    this.clock.restore();
+    videojs.xhr.XMLHttpRequest = window.XMLHttpRequest;
+    this.xhr.restore();
+  }
 };
 
-Helper.MockMediaSource.open = function() {};
 export default Helper;
-

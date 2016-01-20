@@ -1,8 +1,7 @@
 import QUnit from 'qunit';
 import {GOAL_BUFFER_LENGTH, default as SegmentLoader} from '../src/segment-loader';
 import videojs from 'video.js';
-import {useFakeEnvironment, MockMediaSource} from './test-helpers';
-import Helper from './test-data/plugin-helpers.js';
+import {default as Helper, MockSourceBufferMediaSource} from './test-data/plugin-helpers.js';
 
 const playlistWithDuration = function(time, conf) {
   let result = {
@@ -44,12 +43,13 @@ let loader;
 
 QUnit.module('Segment Loader', {
   beforeEach() {
-    this.env = useFakeEnvironment();
-    this.clock = this.env.clock;
-    this.requests = this.env.requests;
+    let fakeEnvironment = Helper.useFakeEnvironment();
+
+    this.clock = fakeEnvironment.clock;
+    this.requests = fakeEnvironment.requests;
 
     currentTime = 0;
-    mediaSource = new MockMediaSource();
+    mediaSource = new MockSourceBufferMediaSource();
     loader = new SegmentLoader({
       currentTime() {
         return currentTime;
@@ -58,7 +58,7 @@ QUnit.module('Segment Loader', {
     });
   },
   afterEach() {
-    this.env.restore();
+    Helper.restoreEnvironment();
   }
 });
 
@@ -806,18 +806,18 @@ QUnit.skip('cleans up the buffer when loading VOD segments', function() {
 
 QUnit.module('Segment Loading Calculation', {
   beforeEach() {
-    this.env = useFakeEnvironment();
+    Helper.useFakeEnvironment();
 
     currentTime = 0;
     loader = new SegmentLoader({
       currentTime() {
         return currentTime;
       },
-      mediaSource: new MockMediaSource()
+      mediaSource: new MockSourceBufferMediaSource()
     });
   },
   afterEach() {
-    this.env.restore();
+    Helper.restoreEnvironment();
   }
 });
 

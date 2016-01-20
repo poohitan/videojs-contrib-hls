@@ -1,7 +1,7 @@
-import sinon from 'sinon';
 import QUnit from 'qunit';
 import PlaylistLoader from '../src/playlist-loader';
-import videojs from 'video.js';
+import Helper from './test-data/plugin-helpers';
+
 // Attempts to produce an absolute URL to a given relative path
 // based on window.location.href
 const urlTo = function(path) {
@@ -14,28 +14,14 @@ const urlTo = function(path) {
 
 QUnit.module('Playlist Loader', {
   beforeEach() {
-    /* eslint-disable consistent-this */
-    let self = this;
-    /* eslint-enable consistent-this */
+    let fakeEnvironment;
 
-    // fake XHRs
-    this.oldXHR = videojs.xhr.XMLHttpRequest;
-    this.sinonXhr = sinon.useFakeXMLHttpRequest();
-    this.requests = [];
-    this.sinonXhr.onCreate = function(xhr) {
-      // force the XHR2 timeout polyfill
-      xhr.timeout = null;
-      self.requests.push(xhr);
-    };
-
-    // fake timers
-    this.clock = sinon.useFakeTimers();
-    videojs.xhr.XMLHttpRequest = this.sinonXhr;
+    fakeEnvironment = Helper.useFakeEnvironment();
+    this.clock = fakeEnvironment.clock;
+    this.requests = fakeEnvironment.requests;
   },
   afterEach() {
-    this.sinonXhr.restore();
-    this.clock.restore();
-    videojs.xhr.XMLHttpRequest = this.oldXHR;
+    Helper.restoreEnvironment();
   }
 });
 

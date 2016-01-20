@@ -1,10 +1,8 @@
 import document from 'global/document';
 import videojs from 'video.js';
-import sinon from 'sinon';
 import QUnit from 'qunit';
 import {Hls, HlsSourceHandler, HlsHandler} from '../src/plugin';
-import Helper from './test-data/plugin-helpers.js';
-import {useFakeEnvironment} from './test-helpers';
+import {default as Helper, MockMediaSource} from './test-data/plugin-helpers.js';
 
 const Player = videojs.getComponent('Player');
 const Flash = videojs.getComponent('Flash');
@@ -12,13 +10,11 @@ let nextId = 0;
 
 QUnit.module('HLS:general', {
   beforeEach() {
-    /* eslint-disable consistent-this */
-    let self = this;
-    /* eslint-enable consistent-this */
+    let fakeEnvironment;
 
-    // Mock the environment's timers because certain things - particularly
-    // player readiness - are asynchronous in video.js 5.
-    this.clock = sinon.useFakeTimers();
+    fakeEnvironment = Helper.useFakeEnvironment();
+    this.clock = fakeEnvironment.clock;
+    this.requests = fakeEnvironment.requests;
 
     // setup a player
     this.player = Helper.createPlayer();
@@ -65,17 +61,6 @@ QUnit.module('HLS:general', {
       return true;
     };
 
-    // fake XHRs
-    this.old.XHR = videojs.xhr.XMLHttpRequest;
-    this.sinonXHR = sinon.useFakeXMLHttpRequest();
-    this.requests = [];
-    this.sinonXHR.onCreate = function(xhr) {
-      // force the XHR2 timeout polyfill
-      xhr.timeout = null;
-      self.requests.push(xhr);
-    };
-    videojs.xhr.XMLHttpRequest = this.sinonXHR;
-
     // Fake sourcebuffer
     this.old.SourceBuffer = window.videojs.SourceBuffer;
     window.videojs.SourceBuffer = function() {
@@ -96,19 +81,16 @@ QUnit.module('HLS:general', {
 
     // Mock Media Sources
     this.old.MediaSource = Player.prototype.MediaSource;
-    Player.prototype.MediaSource = Helper.MockMediaSource;
+    Player.prototype.MediaSource = MockMediaSource;
     this.old.URL = Player.prototype.URL;
     Player.prototype.URL = Helper.URL;
   },
 
   afterEach() {
-    // The clock _must_ be restored before disposing the player; otherwise,
-    // certain timeout listeners that happen inside video.js may throw errors.
-    this.clock.restore();
+    Helper.restoreEnvironment();
+
     this.player.dispose();
 
-    this.sinonXHR.restore();
-    videojs.xhr.XMLHttpRequest = this.old.XHR;
     Player.prototype.MediaSource = this.old.MediaSource;
     Player.prototype.URL = this.old.URL;
 
@@ -1905,13 +1887,14 @@ QUnit.test('does not download segments if preload option set to none', function(
 
 QUnit.module('HLS:integration', {
   beforeEach() {
-    this.env = useFakeEnvironment();
-    this.requests = this.env.requests;
-    this.clock = sinon.useFakeTimers();
+    let fakeEnvironment = Helper.useFakeEnvironment();
+
+    this.requests = fakeEnvironment.requests;
+    this.clock = fakeEnvironment.clock;
     this.tech = new (videojs.getTech('Html5'))({});
   },
   afterEach() {
-    this.env.restore();
+    Helper.restoreEnvironment();
   }
 });
 

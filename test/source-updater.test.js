@@ -1,10 +1,10 @@
 import SourceUpdater from '../src/source-updater';
 import QUnit from 'qunit';
-import {MockMediaSource} from './test-helpers';
+import {MockSourceBufferMediaSource} from './test-data/plugin-helpers';
 
 QUnit.module('Source Updater', {
   beforeEach() {
-    this.mediaSource = new MockMediaSource();
+    this.mediaSource = new MockSourceBufferMediaSource();
   }
 });
 
