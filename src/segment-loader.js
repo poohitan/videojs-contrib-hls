@@ -294,14 +294,14 @@ export default videojs.extend(videojs.EventTarget, {
     let keyXhrRequest;
     let view;
 
-    segmentInfo = this.pendingSegment_;
-    segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
-
     // timeout of previously aborted request
     if (!this.xhr_ ||
         (request !== this.xhr_.segmentXhr && request !== this.xhr_.keyXhr)) {
       return;
     }
+
+    segmentInfo = this.pendingSegment_;
+    segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
 
     // if a request times out, reset bandwidth tracking
     if (request.timedout) {
