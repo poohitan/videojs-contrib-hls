@@ -142,7 +142,7 @@ HlsSourceHandler.canPlayType = function(type) {
   let mpegurlRE = /^application\/(?:x-|vnd\.apple\.)mpegurl/i;
 
   // favor native HLS support if it's available
-  if (Hls.supportsNativeHls) {
+  if (Hls.supportsNativeHls()) {
     return false;
   }
   return mpegurlRE.test(type);
@@ -480,12 +480,6 @@ HlsHandler.prototype.setCurrentTime = function(currentTime) {
   if (!this.tech_.paused()) {
     this.segments.load();
   }
-
-  // abort outstanding key requests, if necessary
-  if (this.keyXhr_) {
-    this.keyXhr_.aborted = true;
-    this.cancelKeyXhr();
-  }
 };
 
 HlsHandler.prototype.duration = function() {
@@ -565,14 +559,6 @@ HlsHandler.prototype.updateDuration = function(playlist) {
 HlsHandler.prototype.resetSrc_ = function() {
   if (this.sourceBuffer && this.mediaSource.readyState === 'open') {
     this.sourceBuffer.abort();
-  }
-};
-
-HlsHandler.prototype.cancelKeyXhr = function() {
-  if (this.keyXhr_) {
-    this.keyXhr_.onreadystatechange = null;
-    this.keyXhr_.abort();
-    this.keyXhr_ = null;
   }
 };
 

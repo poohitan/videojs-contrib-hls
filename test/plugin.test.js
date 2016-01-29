@@ -74,7 +74,7 @@ QUnit.module('HLS:general', {
 
     // force the HLS tech to run
     this.old.NativeHlsSupport = Hls.supportsNativeHls;
-    Hls.supportsNativeHls = false;
+    Hls.supportsNativeHls = () => false;
 
     this.old.Decrypt = Hls.Decrypter;
     Hls.Decrypter = function() {};
@@ -1609,7 +1609,7 @@ QUnit.test('fires loadstart manually if Flash is used', function() {
 QUnit.test('has no effect if native HLS is available', function() {
   let player;
 
-  Hls.supportsNativeHls = true;
+  Hls.supportsNativeHls = () => true;
   player = Helper.createPlayer();
   player.src({
     src: 'http://example.com/manifest/master.m3u8',
