@@ -510,6 +510,18 @@ function() {
     1,
     'calculates within the second segment'
   );
+
+  loader.media().segments[1].end = 159;
+  QUnit.equal(
+    Playlist.getMediaIndexForTime_(media, 159),
+    2,
+    'returns number of segments when time is equal to end of last segment'
+  );
+  QUnit.equal(
+    Playlist.getMediaIndexForTime_(media, 159.1),
+    2,
+    'returns number of segments when time is past end of last segment'
+  );
 });
 
 QUnit.test('prefers precise segment timing when tracking expired time', function() {

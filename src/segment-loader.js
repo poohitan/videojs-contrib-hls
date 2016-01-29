@@ -179,7 +179,11 @@ export default videojs.extend(videojs.EventTarget, {
         return null;
       }
       mediaIndex = getMediaIndexForTime(playlist, currentBufferedEnd, timestampOffset);
+      if (!mediaIndex || mediaIndex === playlist.segments.length) {
+        return null;
+      }
     }
+
     segment = playlist.segments[mediaIndex];
 
     // if the timestampOffset on the SourceBuffer is different from

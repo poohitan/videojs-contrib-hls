@@ -881,6 +881,20 @@ QUnit.test('stops downloading segments at the end of the playlist', function() {
   QUnit.ok(!segmentInfo, 'no request was made');
 });
 
+QUnit.test('stops downloading segments if buffered past reported end of the playlist',
+function() {
+  let buffered;
+  let segmentInfo;
+  let playlist;
+
+  buffered = videojs.createTimeRanges([[0, 59.9]]);
+  playlist = playlistWithDuration(60);
+  playlist.segments[playlist.segments.length - 1].end = 59.9;
+  segmentInfo = loader.checkBuffer_(buffered, playlist, 50);
+
+  QUnit.ok(!segmentInfo, 'no request was made');
+});
+
 QUnit.test('calculates timestampOffset for discontinuities', function() {
   let segmentInfo;
   let playlist;

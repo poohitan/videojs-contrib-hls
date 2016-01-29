@@ -246,6 +246,11 @@ export const getMediaIndexForTime_ = function(playlist, time, expired) {
     }
   }
 
+  // time was equal to or past the end of the last segment in the playlist
+  if (startIndex === numSegments) {
+    return numSegments;
+  }
+
   // use the bounds we just found and playlist information to
   // estimate the segment that contains the time we are looking for
   if (typeof startIndex !== 'undefined') {
