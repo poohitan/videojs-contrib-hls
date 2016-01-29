@@ -406,19 +406,21 @@ HlsHandler.prototype.setupFirstPlay = function() {
       this.sourceBuffer &&
 
       // 4) the active media playlist is available
-      media &&
+      media) {
+    // 5) the video element or flash player is in a readyState of
+    // at least HAVE_METADATA
+    if (this.tech_.readyState() >= 1) {
+      // trigger the playlist loader to start "expired time"-tracking
+      this.playlists.trigger('firstplay');
 
-      // 5) the video element or flash player is in a readyState of
-      // at least HAVE_FUTURE_DATA
-      this.tech_.readyState() >= 1) {
-
-    // trigger the playlist loader to start "expired time"-tracking
-    this.playlists.trigger('firstplay');
-
-    // seek to the latest media position for live videos
-    seekable = this.seekable();
-    if (seekable.length) {
-      this.tech_.setCurrentTime(seekable.end(0));
+      // seek to the latest media position for live videos
+      seekable = this.seekable();
+      if (seekable.length) {
+        this.tech_.setCurrentTime(seekable.end(0));
+      }
+    } else {
+      // start loading a segment to retrieve necessary metadata
+      this.segments.load();
     }
   }
 };
