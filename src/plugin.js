@@ -6,7 +6,7 @@
 
 import {MediaSource, URL} from 'videojs-contrib-media-sources';
 import PlaylistLoader from './playlist-loader';
-import SegmentLoader from './segment-loader';
+import {default as SegmentLoader, CODE_BUFFER_GAP} from './segment-loader';
 import Playlist from './playlist';
 import m3u8 from './m3u8';
 import {Decrypter, AsyncStream, decrypt} from './decrypter';
@@ -251,7 +251,13 @@ HlsHandler.prototype.src = function(src) {
     this.playlists.media(this.selectPlaylist());
   }.bind(this));
   this.segments.on('error', function() {
-    this.blacklistCurrentPlaylist_(this.segments.error());
+    let error = this.segments.error();
+
+    if (error.code === CODE_BUFFER_GAP) {
+      this.tech_.setCurrentTime(error.nextBufferStart);
+    } else {
+      this.blacklistCurrentPlaylist_(this.segments.error());
+    }
   }.bind(this));
 
   // do nothing if the tech has been disposed already

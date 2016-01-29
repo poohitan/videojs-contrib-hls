@@ -27,6 +27,24 @@ const filterRanges = function(timeRanges, predicate) {
 };
 
 /**
+ * Attempts to find a TimeRange between provided TimeRanges that contains the specified
+ * time.
+ * @param timeRanges {TimeRanges} the TimeRanges object to query
+ * @param time {number} the time to filter on
+ * @return a new TimeRange object
+ */
+const findGapWithTime = function(timeRanges, time) {
+  if (timeRanges && timeRanges.length > 1) {
+    for (let i = 1; i < timeRanges.length; i++) {
+      if (time > timeRanges.end(i - 1) && time < timeRanges.start(i)) {
+        return videojs.createTimeRange(timeRanges.end(i - 1), timeRanges.start(i));
+      }
+    }
+  }
+  return videojs.createTimeRange();
+};
+
+/**
  * Attempts to find the buffered TimeRange that contains the specified
  * time.
  * @param buffered {TimeRanges} the TimeRanges object to query
@@ -115,6 +133,7 @@ const findSoleUncommonTimeRangesEnd = function(original, update) {
 
 export default {
   findRange_: findRange,
+  findGapWithTime_: findGapWithTime,
   findNextRange_: findNextRange,
   findSoleUncommonTimeRangesEnd_: findSoleUncommonTimeRangesEnd,
   TIME_FUDGE_FACTOR

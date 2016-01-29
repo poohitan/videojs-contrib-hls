@@ -7,6 +7,7 @@
 
 import {
   findRange_ as findRange,
+  findGapWithTime_ as findGapWithTime,
   findSoleUncommonTimeRangesEnd_ as findSoleUncommonTimeRangesEnd
 } from './ranges';
 import {getMediaIndexForTime_ as getMediaIndexForTime, duration} from './playlist';
@@ -20,6 +21,8 @@ const CHECK_BUFFER_DELAY = 500;
 
 // the desired length of video to maintain in the buffer, in seconds
 export const GOAL_BUFFER_LENGTH = 30;
+
+export const CODE_BUFFER_GAP = 100;
 
 export default videojs.extend(videojs.EventTarget, {
   constructor(options) {
@@ -159,6 +162,7 @@ export default videojs.extend(videojs.EventTarget, {
     let discontinuity;
     let segment;
     let mediaIndex;
+    let bufferGap;
 
     if (!playlist.segments.length) {
       return;
@@ -168,6 +172,27 @@ export default videojs.extend(videojs.EventTarget, {
     if (currentBuffered.length === 0) {
       // find the segment containing currentTime
       mediaIndex = getMediaIndexForTime(playlist, currentTime, timestampOffset);
+      segment = playlist.segments[mediaIndex];
+
+      // In Chrome, if we append an earlier segment after we've appended a later segment,
+      // the buffered values may shift and create a short gap. In this case, we
+      // need to throw an error and allow the caller to address it (and pass the next
+      // buffer start value to allow an easy seek to point).
+      bufferGap = findGapWithTime(buffered, currentTime);
+      if (bufferGap.length &&
+          // Don't have exact measurements in which this gap will occur, but dividing by
+          // two should handle the majority of cases and still allow us to request the
+          // segment if we haven't yet.
+          bufferGap.end(0) - bufferGap.start(0) < segment.duration / 2) {
+        this.error({
+          message: 'Gap in buffer that can\'t be filled by segment',
+          code: CODE_BUFFER_GAP,
+          nextBufferStart: bufferGap.end(0)
+        });
+        this.state = 'READY';
+        this.pause();
+        return this.trigger('error');
+      }
     } else {
       // find the segment adjacent to the end of the current
       // buffered region
