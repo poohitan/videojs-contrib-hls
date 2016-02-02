@@ -18,7 +18,7 @@ const backwardDuration = function(playlist, endSequence) {
     }
     if (typeof segment.end !== 'undefined') {
       return {
-        result: segment.end - segment.duration,
+        result: segment.end - segment.duration < 0 ? 0 : segment.end - segment.duration,
         precise: true
       };
     }

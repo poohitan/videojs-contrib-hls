@@ -386,6 +386,40 @@ QUnit.test('seekable end accounts for non-standard target durations', function()
   );
 });
 
+QUnit.test(
+'seekable start is zero when first segment\'s duration is greater than its end time',
+function() {
+  let seekable = Playlist.seekable({
+    targetDuration: 2,
+    mediaSequence: 0,
+    segments: [{
+      duration: 2,
+      end: 1.9,
+      uri: '0.ts'
+    }, {
+      duration: 2,
+      uri: '1.ts'
+    }, {
+      duration: 1,
+      uri: '2.ts'
+    }, {
+      duration: 2,
+      uri: '3.ts'
+    }, {
+      duration: 2,
+      uri: '4.ts'
+    }]
+  });
+
+  QUnit.equal(seekable.start(0), 0, 'starts at zero');
+  QUnit.equal(
+    seekable.end(0),
+    // avoid imprecise decimal value
+    Math.round(10 * (8.9 - (2 + 2 + 1))) / 10,
+    'allows seeking no further than three segments from the end'
+  );
+});
+
 QUnit.module('Playlist Media Index For Time', {
   beforeEach() {
     let fakeEnvironment;
