@@ -1,6 +1,7 @@
 import QUnit from 'qunit';
 import {GOAL_BUFFER_LENGTH, default as SegmentLoader} from '../src/segment-loader';
 import videojs from 'video.js';
+import {TIME_FUDGE_FACTOR} from '../src/ranges';
 import {
   default as Helper,
   MockSourceBufferMediaSource
@@ -57,7 +58,10 @@ QUnit.module('Segment Loader', {
       currentTime() {
         return currentTime;
       },
-      mediaSource
+      mediaSource,
+      seeking: () => false,
+      seekable: () => videojs.createTimeRanges(),
+      setCurrentTime() {}
     });
   },
   afterEach() {
@@ -451,7 +455,10 @@ QUnit.test('respects the global withCredentials option', function() {
     currentTime() {
       return currentTime;
     },
-    mediaSource
+    mediaSource,
+    seeking: () => false,
+    seekable: () => videojs.createTimeRanges(),
+    setCurrentTime() {}
   });
   loader.playlist(playlistWithDuration(10, {isEncrypted: true}));
   loader.load();
@@ -469,7 +476,10 @@ QUnit.test('respects the withCredentials option', function() {
       return currentTime;
     },
     mediaSource,
-    withCredentials: true
+    withCredentials: true,
+    seeking: () => false,
+    seekable: () => videojs.createTimeRanges(),
+    setCurrentTime() {}
   });
   loader.playlist(playlistWithDuration(10, {isEncrypted: true}));
   loader.load();
@@ -491,7 +501,10 @@ QUnit.test('the withCredentials option overrides the global', function() {
       return currentTime;
     },
     mediaSource,
-    withCredentials: false
+    withCredentials: false,
+    seeking: () => false,
+    seekable: () => videojs.createTimeRanges(),
+    setCurrentTime() {}
   });
   loader.playlist(playlistWithDuration(10, {isEncrypted: true}));
   loader.load();
@@ -816,7 +829,10 @@ QUnit.module('Segment Loading Calculation', {
       currentTime() {
         return currentTime;
       },
-      mediaSource: new MockSourceBufferMediaSource()
+      mediaSource: new MockSourceBufferMediaSource(),
+      seeking: () => false,
+      seekable: () => videojs.createTimeRanges(),
+      setCurrentTime() {}
     });
   },
   afterEach() {
@@ -922,4 +938,125 @@ QUnit.test('adjusts calculations based on an offset', function() {
                                     10);
   QUnit.ok(segmentInfo, 'fetched a segment');
   QUnit.equal(segmentInfo.uri, '2.ts', 'accounted for the offset');
+});
+
+QUnit.module('Segment Loading Buffer Errors', {
+  beforeEach() {
+    Helper.useFakeEnvironment();
+
+    currentTime = 0;
+    loader = new SegmentLoader({
+      currentTime() {
+        return currentTime;
+      },
+      mediaSource: new MockSourceBufferMediaSource(),
+      seeking: () => false,
+      seekable: () => videojs.createTimeRanges(),
+      setCurrentTime() {}
+    });
+  },
+  afterEach() {
+    Helper.restoreEnvironment();
+  }
+});
+
+QUnit.test('buffer check returns null when buffer error corrector handles the situation',
+function() {
+  let buffered = videojs.createTimeRanges();
+  let playlist = playlistWithDuration(20);
+  let timestampOffset = 0;
+  let segmentInfo = loader.checkBuffer_(buffered, playlist, currentTime, timestampOffset);
+
+  QUnit.ok(segmentInfo, 'normally returns segment info');
+
+  loader.correctBufferErrors_ = () => null;
+  segmentInfo = loader.checkBuffer_(buffered, playlist, currentTime, timestampOffset);
+  QUnit.ok(!segmentInfo, 'returns null when correct buffer errors returns null');
+});
+
+QUnit.test(
+'adjusts seek to buffer start when seeking to start and next buffer in range of segment',
+function() {
+  let resultantTime;
+  let correctedMediaIndex;
+  let currentBuffered = videojs.createTimeRanges();
+  let buffered = videojs.createTimeRanges([[1, 10]]);
+  let playlist = playlistWithDuration(20);
+
+  loader.setCurrentTime_ = (time) => {
+    resultantTime = time;
+  };
+
+  loader.seekable_ = () => videojs.createTimeRanges([[0, 10]]);
+
+  // Not seeking, no containing buffer
+
+  correctedMediaIndex = loader.correctBufferErrors_({
+    mediaIndex: 0,
+    currentBuffered,
+    buffered,
+    playlist,
+    currentTime: 0
+  });
+
+  QUnit.equal(correctedMediaIndex, 0, 'media index is unchanged');
+  QUnit.equal(typeof resultantTime, 'undefined', 'player did not seek');
+
+  // Seeking, but time within current buffered
+  loader.seeking_ = () => true;
+  currentBuffered = videojs.createTimeRanges([[0, 10]]);
+
+  correctedMediaIndex = loader.correctBufferErrors_({
+    mediaIndex: 0,
+    currentBuffered,
+    buffered,
+    playlist,
+    currentTime: 0
+  });
+
+  QUnit.equal(correctedMediaIndex, 0, 'media index is unchanged');
+  QUnit.equal(typeof resultantTime, 'undefined', 'player did not seek');
+
+  // Seeking, but time after seekable start
+  currentBuffered = videojs.createTimeRanges([[1, 10]]);
+
+  correctedMediaIndex = loader.correctBufferErrors_({
+    mediaIndex: 0,
+    currentBuffered,
+    buffered,
+    playlist,
+    currentTime: 11
+  });
+
+  QUnit.equal(correctedMediaIndex, 0, 'media index is unchanged');
+  QUnit.equal(typeof resultantTime, 'undefined', 'player did not seek');
+
+  // Seeking, but next buffered range greater than half next segment's duration away
+  currentBuffered = videojs.createTimeRanges();
+  buffered = videojs.createTimeRanges([[5.1, 10]]);
+
+  correctedMediaIndex = loader.correctBufferErrors_({
+    mediaIndex: 0,
+    currentBuffered,
+    buffered,
+    playlist,
+    currentTime: 0
+  });
+
+  QUnit.equal(correctedMediaIndex, 0, 'media index is unchanged');
+  QUnit.equal(typeof resultantTime, 'undefined', 'player did not seek');
+
+  // Seeking and don't have current buffered, but have in range next buffer
+  buffered = videojs.createTimeRanges([[1, 10]]);
+
+  correctedMediaIndex = loader.correctBufferErrors_({
+    mediaIndex: 0,
+    currentBuffered,
+    buffered,
+    playlist,
+    currentTime: 0
+  });
+
+  QUnit.equal(correctedMediaIndex, null, 'resultant media index is null');
+  QUnit.equal(resultantTime, 1 + TIME_FUDGE_FACTOR, 'player seeked to 1');
 });

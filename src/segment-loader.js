@@ -7,7 +7,9 @@
 
 import {
   findRange_ as findRange,
-  findSoleUncommonTimeRangesEnd_ as findSoleUncommonTimeRangesEnd
+  findSoleUncommonTimeRangesEnd_ as findSoleUncommonTimeRangesEnd,
+  findNextRange_ as findNextRange,
+  TIME_FUDGE_FACTOR
 } from './ranges';
 import {getMediaIndexForTime_ as getMediaIndexForTime, duration} from './playlist';
 import videojs from 'video.js';
@@ -47,6 +49,9 @@ export default videojs.extend(videojs.EventTarget, {
     this.currentTime_ = settings.currentTime;
     this.mediaSource_ = settings.mediaSource;
     this.withCredentials_ = settings.withCredentials;
+    this.seeking_ = settings.seeking;
+    this.seekable_ = settings.seekable;
+    this.setCurrentTime_ = settings.setCurrentTime;
     this.checkBufferTimeout_ = null;
     this.error_ = void 0;
     this.timestampOffset_ = 0;
@@ -140,6 +145,41 @@ export default videojs.extend(videojs.EventTarget, {
     this.checkBufferTimeout_ = window.setTimeout(this.monitorBuffer_.bind(this),
                                                  CHECK_BUFFER_DELAY);
   },
+
+  correctBufferErrors_({
+    mediaIndex, currentBuffered, buffered, playlist, currentTime, timestampOffset
+  }) {
+    let nextBuffered;
+    let firstSeekableSegment;
+    let seekable;
+
+    // When seeking to the beginning of the seekable range, it's
+    // possible that imprecise timing information may cause the seek to
+    // end up earlier than the start of the range
+    // in that case, seek again
+    if (currentBuffered.length === 0) {
+      if (this.seeking_()) {
+        seekable = this.seekable_();
+        if (seekable.length && currentTime <= seekable.start(0)) {
+          nextBuffered = findNextRange(buffered, currentTime);
+          firstSeekableSegment = playlist.segments[
+            getMediaIndexForTime(playlist, seekable.start(0), timestampOffset)];
+          if (nextBuffered.length &&
+              // The next buffered range must be less than a segment's duration away from
+              // where we're seeking to, otherwise we'll never request the first segment
+              // in the seekable range
+              nextBuffered.start(0) - currentTime < firstSeekableSegment.duration / 2) {
+            this.setCurrentTime_(nextBuffered.start(0) + TIME_FUDGE_FACTOR);
+            return null;
+          }
+          return mediaIndex;
+        }
+      }
+    }
+
+    return mediaIndex;
+  },
+
   /**
    * Determines what segment request should be made, given current
    * playback state.
@@ -179,9 +219,17 @@ export default videojs.extend(videojs.EventTarget, {
         return null;
       }
       mediaIndex = getMediaIndexForTime(playlist, currentBufferedEnd, timestampOffset);
-      if (!mediaIndex || mediaIndex === playlist.segments.length) {
+      if (mediaIndex === playlist.segments.length) {
         return null;
       }
+    }
+
+    mediaIndex = this.correctBufferErrors_({
+      mediaIndex, currentBuffered, buffered, playlist, currentTime, timestampOffset
+    });
+
+    if (mediaIndex === null) {
+      return null;
     }
 
     segment = playlist.segments[mediaIndex];

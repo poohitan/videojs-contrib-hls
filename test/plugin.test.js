@@ -1589,7 +1589,9 @@ QUnit.test('fires loadstart manually if Flash is used', function() {
       return 'auto';
     },
     src() {},
-    setTimeout: window.setTimeout
+    setTimeout: window.setTimeout,
+    seeking: () => false,
+    setCurrentTime() {}
   }))();
   let loadstarts = 0;
 

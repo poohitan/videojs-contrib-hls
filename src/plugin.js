@@ -241,7 +241,10 @@ HlsHandler.prototype.src = function(src) {
   this.segments = new SegmentLoader({
     currentTime: this.tech_.currentTime.bind(this.tech_),
     mediaSource: this.mediaSource,
-    withCredentials: this.options_.withCredentials
+    withCredentials: this.options_.withCredentials,
+    seeking: this.tech_.seeking.bind(this.tech_),
+    seekable: this.seekable.bind(this),
+    setCurrentTime: this.tech_.setCurrentTime.bind(this.tech_)
   });
 
   this.segments.on('progress', function() {
