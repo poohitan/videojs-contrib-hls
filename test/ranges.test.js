@@ -15,6 +15,47 @@ QUnit.test('finds the overlapping time range', function() {
   QUnit.equal(range.end(0), 12, 'inside the second buffered region');
 });
 
+QUnit.test('finds gaps in time ranges', function() {
+  let gap;
+  let timeRanges = createTimeRanges();
+
+  // Nothing returned when no time ranges
+  gap = Ranges.findGapWithTime(timeRanges, 0);
+  QUnit.equal(gap.length, 0, 'empty time range');
+  gap = Ranges.findGapWithTime(timeRanges, 1);
+  QUnit.equal(gap.length, 0, 'empty time range');
+
+  // Nothing returned when only one time range
+  timeRanges = createTimeRanges([[1, 10]]);
+  gap = Ranges.findGapWithTime(timeRanges, 0);
+  QUnit.equal(gap.length, 0, 'empty time range');
+  gap = Ranges.findGapWithTime(timeRanges, 5);
+  QUnit.equal(gap.length, 0, 'empty time range');
+  gap = Ranges.findGapWithTime(timeRanges, 11);
+  QUnit.equal(gap.length, 0, 'empty time range');
+
+  // Nothing returned when time is in a time range
+  timeRanges = createTimeRanges([[5, 10], [15, 20]]);
+  gap = Ranges.findGapWithTime(timeRanges, 5);
+  QUnit.equal(gap.length, 0, 'empty time range');
+  gap = Ranges.findGapWithTime(timeRanges, 7);
+  QUnit.equal(gap.length, 0, 'empty time range');
+  gap = Ranges.findGapWithTime(timeRanges, 20);
+  QUnit.equal(gap.length, 0, 'empty time range');
+
+  // Nothing returned when time is not between two time ranges
+  gap = Ranges.findGapWithTime(timeRanges, 4);
+  QUnit.equal(gap.length, 0, 'empty time range');
+  gap = Ranges.findGapWithTime(timeRanges, 21);
+  QUnit.equal(gap.length, 0, 'empty time range');
+
+  // Returns gap when time is between two time ranges
+  gap = Ranges.findGapWithTime(timeRanges, 11);
+  QUnit.equal(gap.length, 1, 'returns time range gap');
+  QUnit.equal(gap.start(0), 10, 'start is end of previous range');
+  QUnit.equal(gap.end(0), 15, 'end is start of next range');
+});
+
 QUnit.module('Buffer Inpsection');
 
 QUnit.test('detects time range end-point changed by updates', function() {

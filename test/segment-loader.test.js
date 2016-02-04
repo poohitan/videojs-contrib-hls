@@ -1060,3 +1060,26 @@ function() {
   QUnit.equal(correctedMediaIndex, null, 'resultant media index is null');
   QUnit.equal(resultantTime, 1 + TIME_FUDGE_FACTOR, 'player seeked to 1');
 });
+
+QUnit.test('seek to start of next buffer range if there\'s a gap', function() {
+  let resultantTime;
+  let correctedMediaIndex;
+  let currentBuffered = videojs.createTimeRanges();
+  let buffered = videojs.createTimeRanges([[1, 10], [12, 20]]);
+  let playlist = playlistWithDuration(20);
+
+  loader.setCurrentTime_ = (time) => {
+    resultantTime = time;
+  };
+
+  correctedMediaIndex = loader.correctBufferErrors_({
+    mediaIndex: 1,
+    currentBuffered,
+    buffered,
+    playlist,
+    currentTime: 11
+  });
+
+  QUnit.equal(correctedMediaIndex, null, 'resultant media index is null');
+  QUnit.equal(resultantTime, 12, 'player seeked to end of gap');
+});

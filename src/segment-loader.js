@@ -9,6 +9,7 @@ import {
   findRange_ as findRange,
   findSoleUncommonTimeRangesEnd_ as findSoleUncommonTimeRangesEnd,
   findNextRange_ as findNextRange,
+  findGapWithTime,
   TIME_FUDGE_FACTOR
 } from './ranges';
 import {getMediaIndexForTime_ as getMediaIndexForTime, duration} from './playlist';
@@ -151,7 +152,9 @@ export default videojs.extend(videojs.EventTarget, {
   }) {
     let nextBuffered;
     let firstSeekableSegment;
+    let bufferGap;
     let seekable;
+    let segment = playlist.segments[mediaIndex];
 
     // When seeking to the beginning of the seekable range, it's
     // possible that imprecise timing information may cause the seek to
@@ -175,6 +178,19 @@ export default videojs.extend(videojs.EventTarget, {
           return mediaIndex;
         }
       }
+    }
+
+    // In Chrome, if we append an earlier segment after we've appended a later segment,
+    // the buffered values may shift and create a short gap.
+    bufferGap = findGapWithTime(buffered, currentTime);
+    if (bufferGap.length &&
+        // Don't have exact measurements in which this gap will occur, but dividing by
+        // two should handle the majority of cases and still allow us to request the
+        // segment if we haven't yet.
+        bufferGap.end(0) - bufferGap.start(0) < segment.duration / 2) {
+      // Seek to the start of the next buffered range
+      this.setCurrentTime_(bufferGap.end(0));
+      return null;
     }
 
     return mediaIndex;
