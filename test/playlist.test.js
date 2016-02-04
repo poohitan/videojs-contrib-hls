@@ -515,6 +515,16 @@ function() {
     'expired content returns  negative one'
   );
   QUnit.equal(
+    Playlist.getMediaIndexForTime_(media, 149.4),
+    -1,
+    'expired content returns negative one'
+  );
+  QUnit.equal(
+    Playlist.getMediaIndexForTime_(media, 149.51),
+    0,
+    'returns the first segment when time is within rounding error of first segment'
+  );
+  QUnit.equal(
     Playlist.getMediaIndexForTime_(media, 50 + 100),
     0,
     'calculates the earliest available position'
