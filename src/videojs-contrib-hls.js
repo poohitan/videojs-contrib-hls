@@ -564,8 +564,8 @@ export default class HlsHandler extends Component {
     // fall back to the playlist loader's running estimate of expired
     // time
     if (seekable.start(0) === 0) {
-      return videojs.createTimeRanges([[this.playlists.expired_,
-                                        this.playlists.expired_ + seekable.end(0)]]);
+      return videojs.createTimeRanges([[this.playlists.expired,
+                                        this.playlists.expired + seekable.end(0)]]);
     }
 
     // seekable has been calculated based on buffering video data so it

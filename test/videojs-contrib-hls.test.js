@@ -500,7 +500,7 @@ QUnit.test('re-initializes the playlist loader when switching sources', function
   this.clock.tick(1);
   QUnit.ok(!this.player.tech_.hls.playlists.media(), 'no media playlist');
   QUnit.equal(
-    this.player.tech_.hls.playlists.state,
+    this.player.tech_.hls.playlists.state_,
     'HAVE_NOTHING',
     'reset the playlist loader state'
   );
@@ -1468,9 +1468,9 @@ function() {
 
   // add timeline info to the playlist
   this.player.tech_.hls.playlists.media().segments[1].end = 29.5;
-  // expired_ should be ignored if there is timeline information on
+  // expired should be ignored if there is timeline information on
   // the playlist
-  this.player.tech_.hls.playlists.expired_ = 172;
+  this.player.tech_.hls.playlists.expired = 172;
 
   QUnit.equal(this.player.seekable().start(0),
         29.5 - 29,
@@ -1487,10 +1487,10 @@ function() {
   openMediaSource(this.player, this.clock);
 
   standardXHRResponse(this.requests.shift());
-  this.player.tech_.hls.playlists.expired_ = 172;
+  this.player.tech_.hls.playlists.expired = 172;
 
   QUnit.equal(this.player.seekable().start(0),
-        this.player.tech_.hls.playlists.expired_,
+        this.player.tech_.hls.playlists.expired,
         'offset the seekable start');
 });
 

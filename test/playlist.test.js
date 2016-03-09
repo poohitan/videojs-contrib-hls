@@ -532,7 +532,7 @@ QUnit.test('prefers precise segment timing when tracking expired time', function
   );
   // setup the loader with an "imprecise" value as if it had been
   // accumulating segment durations as they expire
-  loader.expired_ = 160;
+  loader.expired = 160;
   // annotate the first segment with a start time
   // this number would be coming from the Source Buffer in practice
   loader.media().segments[0].end = 150;

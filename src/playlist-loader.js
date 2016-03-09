@@ -102,112 +102,147 @@ const updateMaster = function(master, media) {
   return changed ? result : null;
 };
 
-const PlaylistLoader = function(srcUrl, withCredentials) {
-  /* eslint-disable consistent-this */
-  let loader = this;
-  /* eslint-enable consistent-this */
-  let dispose;
-  let mediaUpdateTimeout;
-  let request;
-  let playlistRequestError;
-  let haveMetadata;
+class PlaylistLoader extends Stream {
+  constructor(srcUrl, withCredentials) {
+    super();
 
-  PlaylistLoader.prototype.constructor.call(this);
+    this.expired;
+    this.master;
+    this.error;
 
-  // a flag that disables "expired time"-tracking this setting has
-  // no effect when not playing a live stream
-  this.trackExpiredTime_ = false;
+    this.request_;
+    this.bandwidth_;
+    this.state_;
+    this.mediaUpdateTimeout_;
+    this.media_;
+    this.trackExpiredTime_;
+    this.withCredentials_ = withCredentials;
 
-  if (!srcUrl) {
-    throw new Error('A non-empty playlist URL is required');
+    // a flag that disables "expired time"-tracking this setting has
+    // no effect when not playing a live stream
+    this.trackExpiredTime_ = false;
+
+    if (!srcUrl) {
+      throw new Error('A non-empty playlist URL is required');
+    }
+
+    // initialize the loader state
+    this.state_ = 'HAVE_NOTHING';
+
+    // track the time that has expired from the live window
+    // this allows the seekable start range to be calculated even if
+    // all segments with timing information have expired
+    this.expired = 0;
+
+    // In a live playlist, don't keep track of the expired time
+    // until HLS tells us that "first play" has commenced
+    this.on('firstplay', () => {
+      this.trackExpiredTime_ = true;
+    });
+
+    // live playlist staleness timeout
+    this.on('mediaupdatetimeout', () => {
+      if (this.state_ !== 'HAVE_METADATA') {
+        // only refresh the media playlist if no other activity is going on
+        return;
+      }
+
+      this.state_ = 'HAVE_CURRENT_METADATA';
+      this.request_ = XhrModule({
+        uri: resolveUrl(this.master.uri, this.media().uri),
+        withCredentials: this.withCredentials_
+      }, (error, req) => {
+        if (error) {
+          return this.playlistRequestError_(this.request_, this.media().uri);
+        }
+        this.haveMetadata_(this.request_, this.media().uri);
+      });
+    });
+
+    // request the specified URL
+    this.request_ = XhrModule({
+      uri: srcUrl,
+      withCredentials: this.withCredentials_
+    }, (error, req) => {
+      let parser;
+      let playlist;
+      let i;
+
+      // clear the loader's request reference
+      this.request_ = null;
+
+      if (error) {
+        this.error = {
+          status: req.status,
+          message: 'HLS playlist request error at URL: ' + srcUrl,
+          responseText: req.responseText,
+          // MEDIA_ERR_NETWORK
+          code: 2
+        };
+        return this.trigger('error');
+      }
+
+      parser = new m3u8.Parser();
+      parser.push(req.responseText);
+      parser.end();
+
+      this.state_ = 'HAVE_MASTER';
+
+      parser.manifest.uri = srcUrl;
+
+      // loaded a master playlist
+      if (parser.manifest.playlists) {
+        this.master = parser.manifest;
+
+        // setup by-URI lookups and resolve media playlist URIs
+        i = this.master.playlists.length;
+        while (i--) {
+          playlist = this.master.playlists[i];
+          this.master.playlists[playlist.uri] = playlist;
+          playlist.resolvedUri = resolveUrl(this.master.uri, playlist.uri);
+        }
+
+        this.trigger('loadedplaylist');
+        if (!this.request_) {
+          // no media playlist was specifically selected so start
+          // from the first listed one
+          this.media(parser.manifest.playlists[0]);
+        }
+        return;
+      }
+
+      // loaded a media playlist
+      // infer a master playlist if none was previously requested
+      this.master = {
+        uri: window.location.href,
+        playlists: [{
+          uri: srcUrl
+        }]
+      };
+      this.master.playlists[srcUrl] = this.master.playlists[0];
+      this.master.playlists[0].resolvedUri = srcUrl;
+      this.haveMetadata_(req, srcUrl);
+      return this.trigger('loadedmetadata');
+    });
   }
-
-  playlistRequestError = function(xhr, url, startingState) {
-    loader.setBandwidth(request || xhr);
-
-    // any in-flight request is now finished
-    request = null;
-
-    if (startingState) {
-      loader.state = startingState;
-    }
-
-    loader.error = {
-      playlist: loader.master.playlists[url],
-      status: xhr.status,
-      message: 'HLS playlist request error at URL: ' + url,
-      responseText: xhr.responseText,
-      code: (xhr.status >= 500) ? 4 : 2
-    };
-
-    loader.trigger('error');
-  };
-
-  // update the playlist loader's state in response to a new or
-  // updated playlist.
-  haveMetadata = function(xhr, url) {
-    let parser;
-    let refreshDelay;
-    let update;
-
-    loader.setBandwidth(request || xhr);
-
-    // any in-flight request is now finished
-    request = null;
-
-    loader.state = 'HAVE_METADATA';
-
-    parser = new m3u8.Parser();
-    parser.push(xhr.responseText);
-    parser.end();
-    parser.manifest.uri = url;
-
-    // merge this playlist into the master
-    update = updateMaster(loader.master, parser.manifest);
-    refreshDelay = (parser.manifest.targetDuration || 10) * 1000;
-    if (update) {
-      loader.master = update;
-      loader.updateMediaPlaylist_(parser.manifest);
-    } else {
-      // if the playlist is unchanged since the last reload,
-      // try again after half the target duration
-      refreshDelay /= 2;
-    }
-
-    // refresh live playlists after a target duration passes
-    if (!loader.media().endList) {
-      window.clearTimeout(mediaUpdateTimeout);
-      mediaUpdateTimeout = window.setTimeout(function() {
-        loader.trigger('mediaupdatetimeout');
-      }, refreshDelay);
-    }
-
-    loader.trigger('loadedplaylist');
-  };
-
-  // initialize the loader state
-  loader.state = 'HAVE_NOTHING';
-
-  // track the time that has expired from the live window
-  // this allows the seekable start range to be calculated even if
-  // all segments with timing information have expired
-  this.expired_ = 0;
-
-  // capture the prototype dispose function
-  dispose = this.dispose;
 
   /**
     * Abort any outstanding work and clean up.
     */
-  loader.dispose = function() {
-    if (request) {
-      request.onreadystatechange = null;
-      request.abort();
-      request = null;
+  dispose() {
+    super.dispose();
+
+    this.abortRequest_();
+    window.clearTimeout(this.mediaUpdateTimeout_);
+  }
+
+  abortRequest_() {
+    if (this.request_) {
+      this.request_.onreadystatechange = null;
+      this.request_.abort();
+      this.request_ = null;
     }
-    window.clearTimeout(mediaUpdateTimeout);
-    dispose.call(this);
-  };
+  }
 
   /**
     * When called without any arguments, returns the currently
@@ -219,46 +254,42 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
     * @param playlist (optional) {object} the parsed media playlist
     * object to switch to
     */
-  loader.media = function(playlist) {
-    let startingState = loader.state;
+  media(playlist) {
+    let startingState = this.state_;
     let mediaChange;
 
     // getter
     if (!playlist) {
-      return loader.media_;
+      return this.media_;
     }
 
     // setter
-    if (loader.state === 'HAVE_NOTHING') {
-      throw new Error('Cannot switch media playlist from ' + loader.state);
+    if (this.state_ === 'HAVE_NOTHING') {
+      throw new Error('Cannot switch media playlist from ' + this.state_);
     }
 
     // find the playlist object if the target playlist has been
     // specified by URI
     if (typeof playlist === 'string') {
-      if (!loader.master.playlists[playlist]) {
+      if (!this.master.playlists[playlist]) {
         throw new Error('Unknown playlist URI: ' + playlist);
       }
-      playlist = loader.master.playlists[playlist];
+      playlist = this.master.playlists[playlist];
     }
 
-    mediaChange = !loader.media_ || playlist.uri !== loader.media_.uri;
+    mediaChange = !this.media_ || playlist.uri !== this.media_.uri;
 
     // switch to fully loaded playlists immediately
-    if (loader.master.playlists[playlist.uri].endList) {
+    if (this.master.playlists[playlist.uri].endList) {
       // abort outstanding playlist requests
-      if (request) {
-        request.onreadystatechange = null;
-        request.abort();
-        request = null;
-      }
-      loader.state = 'HAVE_METADATA';
-      loader.media_ = playlist;
+      this.abortRequest_();
+      this.state_ = 'HAVE_METADATA';
+      this.media_ = playlist;
 
       // trigger media change if the active media has been updated
       if (mediaChange) {
-        loader.trigger('mediachanging');
-        loader.trigger('mediachange');
+        this.trigger('mediachanging');
+        this.trigger('mediachange');
       }
       return;
     }
@@ -268,206 +299,173 @@ const PlaylistLoader = function(srcUrl, withCredentials) {
       return;
     }
 
-    loader.state = 'SWITCHING_MEDIA';
+    this.state_ = 'SWITCHING_MEDIA';
 
     // there is already an outstanding playlist request
-    if (request) {
-      if (resolveUrl(loader.master.uri, playlist.uri) === request.url) {
+    if (this.request_) {
+      if (resolveUrl(this.master.uri, playlist.uri) === this.request_.url) {
         // requesting to switch to the same playlist multiple times
         // has no effect after the first
         return;
       }
-      request.onreadystatechange = null;
-      request.abort();
-      request = null;
+      this.abortRequest_();
     }
 
     // request the new playlist
     if (this.media_) {
       this.trigger('mediachanging');
     }
-    request = XhrModule({
-      uri: resolveUrl(loader.master.uri, playlist.uri),
-      withCredentials
-    }, function(error, req) {
+    this.request_ = XhrModule({
+      uri: resolveUrl(this.master.uri, playlist.uri),
+      withCredentials: this.withCredentials_
+    }, (error, req) => {
       if (error) {
-        return playlistRequestError(request, playlist.uri, startingState);
+        return this.playlistRequestError_(this.request_, playlist.uri, startingState);
       }
 
-      haveMetadata(req, playlist.uri);
+      this.haveMetadata_(req, playlist.uri);
 
       // fire loadedmetadata the first time a media playlist is loaded
       if (startingState === 'HAVE_MASTER') {
-        loader.trigger('loadedmetadata');
+        this.trigger('loadedmetadata');
       } else {
-        loader.trigger('mediachange');
+        this.trigger('mediachange');
       }
     });
-  };
+  }
 
-  loader.setBandwidth = function(xhr) {
-    loader.bandwidth = xhr.bandwidth;
-  };
+  setBandwidth_(xhr) {
+    this.bandwidth_ = xhr.bandwidth;
+  }
 
-  // In a live playlist, don't keep track of the expired time
-  // until HLS tells us that "first play" has commenced
-  loader.on('firstplay', function() {
-    this.trackExpiredTime_ = true;
-  });
+  playlistRequestError_(xhr, url, startingState) {
+    this.setBandwidth_(this.request_ || xhr);
 
-  // live playlist staleness timeout
-  loader.on('mediaupdatetimeout', function() {
-    if (loader.state !== 'HAVE_METADATA') {
-      // only refresh the media playlist if no other activity is going on
-      return;
+    // any in-flight request is now finished
+    this.request_ = null;
+
+    if (startingState) {
+      this.state_ = startingState;
     }
 
-    loader.state = 'HAVE_CURRENT_METADATA';
-    request = XhrModule({
-      uri: resolveUrl(loader.master.uri, loader.media().uri),
-      withCredentials
-    }, function(error, req) {
-      if (error) {
-        return playlistRequestError(request, loader.media().uri);
-      }
-      haveMetadata(request, loader.media().uri);
-    });
-  });
-
-  // request the specified URL
-  request = XhrModule({
-    uri: srcUrl,
-    withCredentials
-  }, function(error, req) {
-    let parser;
-    let playlist;
-    let i;
-
-    // clear the loader's request reference
-    request = null;
-
-    if (error) {
-      loader.error = {
-        status: req.status,
-        message: 'HLS playlist request error at URL: ' + srcUrl,
-        responseText: req.responseText,
-        // MEDIA_ERR_NETWORK
-        code: 2
-      };
-      return loader.trigger('error');
-    }
-
-    parser = new m3u8.Parser();
-    parser.push(req.responseText);
-    parser.end();
-
-    loader.state = 'HAVE_MASTER';
-
-    parser.manifest.uri = srcUrl;
-
-    // loaded a master playlist
-    if (parser.manifest.playlists) {
-      loader.master = parser.manifest;
-
-      // setup by-URI lookups and resolve media playlist URIs
-      i = loader.master.playlists.length;
-      while (i--) {
-        playlist = loader.master.playlists[i];
-        loader.master.playlists[playlist.uri] = playlist;
-        playlist.resolvedUri = resolveUrl(loader.master.uri, playlist.uri);
-      }
-
-      loader.trigger('loadedplaylist');
-      if (!request) {
-        // no media playlist was specifically selected so start
-        // from the first listed one
-        loader.media(parser.manifest.playlists[0]);
-      }
-      return;
-    }
-
-    // loaded a media playlist
-    // infer a master playlist if none was previously requested
-    loader.master = {
-      uri: window.location.href,
-      playlists: [{
-        uri: srcUrl
-      }]
+    this.error = {
+      playlist: this.master.playlists[url],
+      status: xhr.status,
+      message: 'HLS playlist request error at URL: ' + url,
+      responseText: xhr.responseText,
+      code: (xhr.status >= 500) ? 4 : 2
     };
-    loader.master.playlists[srcUrl] = loader.master.playlists[0];
-    loader.master.playlists[0].resolvedUri = srcUrl;
-    haveMetadata(req, srcUrl);
-    return loader.trigger('loadedmetadata');
-  });
-};
 
-PlaylistLoader.prototype = new Stream();
-
-/**
-  * Update the PlaylistLoader state to reflect the changes in an
-  * update to the current media playlist.
-  * @param update {object} the updated media playlist object
-  */
-PlaylistLoader.prototype.updateMediaPlaylist_ = function(update) {
-  let outdated;
-  let i;
-  let segment;
-
-  outdated = this.media_;
-  this.media_ = this.master.playlists[update.uri];
-
-  if (!outdated) {
-    return;
+    this.trigger('error');
   }
 
-  // don't track expired time until this flag is truthy
-  if (!this.trackExpiredTime_) {
-    return;
+  // update the playlist loader's state in response to a new or
+  // updated playlist.
+  haveMetadata_(xhr, url) {
+    let parser = new m3u8.Parser();
+    let refreshDelay;
+    let update;
+
+    this.setBandwidth_(this.request || xhr);
+
+    // any in-flight request is now finished
+    this.request_ = null;
+
+    this.state_ = 'HAVE_METADATA';
+
+    parser.push(xhr.responseText);
+    parser.end();
+    parser.manifest.uri = url;
+
+    // merge this playlist into the master
+    update = updateMaster(this.master, parser.manifest);
+    refreshDelay = (parser.manifest.targetDuration || 10) * 1000;
+    if (update) {
+      this.master = update;
+      this.updateMediaPlaylist_(parser.manifest);
+    } else {
+      // if the playlist is unchanged since the last reload,
+      // try again after half the target duration
+      refreshDelay /= 2;
+    }
+
+    // refresh live playlists after a target duration passes
+    if (!this.media().endList) {
+      window.clearTimeout(this.mediaUpdateTimeout_);
+      this.mediaUpdateTimeout_ = window.setTimeout(() => {
+        this.trigger('mediaupdatetimeout');
+      }, refreshDelay);
+    }
+
+    this.trigger('loadedplaylist');
   }
 
-  // if the update was the result of a rendition switch do not
-  // attempt to calculate expired_ since media-sequences need not
-  // correlate between renditions/variants
-  if (update.uri !== outdated.uri) {
-    return;
-  }
+  /**
+    * Update the PlaylistLoader state to reflect the changes in an
+    * update to the current media playlist.
+    * @param update {object} the updated media playlist object
+    */
+  updateMediaPlaylist_(update) {
+    let outdated;
+    let i;
+    let segment;
 
-  // try using precise timing from first segment of the updated
-  // playlist
-  if (update.segments.length) {
-    if (typeof update.segments[0].start !== 'undefined') {
-      this.expired_ = update.segments[0].start;
-      return;
-    } else if (typeof update.segments[0].end !== 'undefined') {
-      this.expired_ = update.segments[0].end - update.segments[0].duration;
-      return;
-    }
-  }
+    outdated = this.media_;
+    this.media_ = this.master.playlists[update.uri];
 
-  // calculate expired by walking the outdated playlist
-  i = update.mediaSequence - outdated.mediaSequence - 1;
-
-  for (; i >= 0; i--) {
-    segment = outdated.segments[i];
-
-    if (!segment) {
-      // we missed information on this segment completely between
-      // playlist updates so we'll have to take an educated guess
-      // once we begin buffering again, any error we introduce can
-      // be corrected
-      this.expired_ += outdated.targetDuration || 10;
-      continue;
-    }
-
-    if (typeof segment.end !== 'undefined') {
-      this.expired_ = segment.end;
+    if (!outdated) {
       return;
     }
-    if (typeof segment.start !== 'undefined') {
-      this.expired_ = segment.start + segment.duration;
+
+    // don't track expired time until this flag is truthy
+    if (!this.trackExpiredTime_) {
       return;
     }
-    this.expired_ += segment.duration;
+
+    // if the update was the result of a rendition switch do not
+    // attempt to calculate expired since media-sequences need not
+    // correlate between renditions/variants
+    if (update.uri !== outdated.uri) {
+      return;
+    }
+
+    // try using precise timing from first segment of the updated
+    // playlist
+    if (update.segments.length) {
+      if (typeof update.segments[0].start !== 'undefined') {
+        this.expired = update.segments[0].start;
+        return;
+      } else if (typeof update.segments[0].end !== 'undefined') {
+        this.expired = update.segments[0].end - update.segments[0].duration;
+        return;
+      }
+    }
+
+    // calculate expired by walking the outdated playlist
+    i = update.mediaSequence - outdated.mediaSequence - 1;
+
+    for (; i >= 0; i--) {
+      segment = outdated.segments[i];
+
+      if (!segment) {
+        // we missed information on this segment completely between
+        // playlist updates so we'll have to take an educated guess
+        // once we begin buffering again, any error we introduce can
+        // be corrected
+        this.expired += outdated.targetDuration || 10;
+        continue;
+      }
+
+      if (typeof segment.end !== 'undefined') {
+        this.expired = segment.end;
+        return;
+      }
+      if (typeof segment.start !== 'undefined') {
+        this.expired = segment.start + segment.duration;
+        return;
+      }
+      this.expired += segment.duration;
+    }
   }
 };
 

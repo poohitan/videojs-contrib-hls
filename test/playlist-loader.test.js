@@ -37,7 +37,7 @@ QUnit.test('throws if the playlist url is empty or undefined', function() {
 QUnit.test('starts without any metadata', function() {
   let loader = new PlaylistLoader('master.m3u8');
 
-  QUnit.strictEqual(loader.state, 'HAVE_NOTHING', 'no metadata has loaded yet');
+  QUnit.strictEqual(loader.state_, 'HAVE_NOTHING', 'no metadata has loaded yet');
 });
 
 QUnit.test('starts with no expired time', function() {
@@ -47,7 +47,7 @@ QUnit.test('starts with no expired time', function() {
                               '#EXTM3U\n' +
                               '#EXTINF:10,\n' +
                               '0.ts\n');
-  QUnit.equal(loader.expired_,
+  QUnit.equal(loader.expired,
               0,
               'zero seconds expired');
 });
@@ -68,7 +68,7 @@ QUnit.test('moves to HAVE_MASTER after loading a master playlist', function() {
   let state;
 
   loader.on('loadedplaylist', function() {
-    state = loader.state;
+    state = loader.state_;
   });
   this.requests.pop().respond(200, null,
                               '#EXTM3U\n' +
@@ -93,7 +93,7 @@ QUnit.test('jumps to HAVE_METADATA when initialized with a media playlist', func
   QUnit.ok(loader.master, 'infers a master playlist');
   QUnit.ok(loader.media(), 'sets the media playlist');
   QUnit.ok(loader.media().uri, 'sets the media playlist URI');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'the state is correct');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'the state is correct');
   QUnit.strictEqual(this.requests.length, 0, 'no more requests are made');
   QUnit.strictEqual(loadedmetadatas, 1, 'fired one loadedmetadata');
 });
@@ -239,7 +239,7 @@ QUnit.test('jumps to HAVE_METADATA when initialized with a live media playlist',
                               '0.ts\n');
   QUnit.ok(loader.master, 'infers a master playlist');
   QUnit.ok(loader.media(), 'sets the media playlist');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'the state is correct');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'the state is correct');
 });
 
 QUnit.test('moves to HAVE_METADATA after loading a media playlist', function() {
@@ -274,7 +274,7 @@ QUnit.test('moves to HAVE_METADATA after loading a media playlist', function() {
   QUnit.ok(loader.media(), 'sets the media playlist');
   QUnit.strictEqual(loadedPlaylist, 2, 'fired loadedplaylist twice');
   QUnit.strictEqual(loadedMetadata, 1, 'fired loadedmetadata once');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'the state is correct');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'the state is correct');
 });
 
 QUnit.test('moves to HAVE_CURRENT_METADATA when refreshing the playlist', function() {
@@ -286,7 +286,7 @@ QUnit.test('moves to HAVE_CURRENT_METADATA when refreshing the playlist', functi
                               '0.ts\n');
   // 10s, one target duration
   this.clock.tick(10 * 1000);
-  QUnit.strictEqual(loader.state, 'HAVE_CURRENT_METADATA', 'the state is correct');
+  QUnit.strictEqual(loader.state_, 'HAVE_CURRENT_METADATA', 'the state is correct');
   QUnit.strictEqual(this.requests.length, 1, 'requested playlist');
   QUnit.strictEqual(this.requests[0].url,
                     urlTo('live.m3u8'),
@@ -306,7 +306,7 @@ QUnit.test('returns to HAVE_METADATA after refreshing the playlist', function() 
                               '#EXTM3U\n' +
                               '#EXTINF:10,\n' +
                               '1.ts\n');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'the state is correct');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'the state is correct');
 });
 
 QUnit.test('does not increment expired seconds before firstplay is triggered',
@@ -337,7 +337,7 @@ function() {
                               '3.ts\n' +
                               '#EXTINF:10,\n' +
                               '4.ts\n');
-  QUnit.equal(loader.expired_, 0, 'expired one segment');
+  QUnit.equal(loader.expired, 0, 'expired one segment');
 });
 
 QUnit.test('increments expired seconds after a segment is removed', function() {
@@ -368,7 +368,7 @@ QUnit.test('increments expired seconds after a segment is removed', function() {
                               '3.ts\n' +
                               '#EXTINF:10,\n' +
                               '4.ts\n');
-  QUnit.equal(loader.expired_, 10, 'expired one segment');
+  QUnit.equal(loader.expired, 10, 'expired one segment');
 });
 
 QUnit.test('increments expired seconds after a discontinuity', function() {
@@ -395,7 +395,7 @@ QUnit.test('increments expired seconds after a discontinuity', function() {
                               '#EXT-X-DISCONTINUITY\n' +
                               '#EXTINF:4,\n' +
                               '2.ts\n');
-  QUnit.equal(loader.expired_, 10, 'expired one segment');
+  QUnit.equal(loader.expired, 10, 'expired one segment');
 
   // 10s, one target duration
   this.clock.tick(10 * 1000);
@@ -405,7 +405,7 @@ QUnit.test('increments expired seconds after a discontinuity', function() {
                               '#EXT-X-DISCONTINUITY\n' +
                               '#EXTINF:4,\n' +
                               '2.ts\n');
-  QUnit.equal(loader.expired_, 13, 'no expirations after the discontinuity yet');
+  QUnit.equal(loader.expired, 13, 'no expirations after the discontinuity yet');
 
   // 10s, one target duration
   this.clock.tick(10 * 1000);
@@ -415,7 +415,7 @@ QUnit.test('increments expired seconds after a discontinuity', function() {
                               '#EXT-X-DISCONTINUITY-SEQUENCE:1\n' +
                               '#EXTINF:10,\n' +
                               '3.ts\n');
-  QUnit.equal(loader.expired_, 17, 'tracked expiration across the discontinuity');
+  QUnit.equal(loader.expired, 17, 'tracked expiration across the discontinuity');
 });
 
 QUnit.test('tracks expired seconds properly when two discontinuities expire at once',
@@ -443,7 +443,7 @@ function() {
                               '#EXT-X-DISCONTINUITY-SEQUENCE:2\n' +
                               '#EXTINF:7,\n' +
                               '3.ts\n');
-  QUnit.equal(loader.expired_, 4 + 5 + 6, 'tracked multiple expiring discontinuities');
+  QUnit.equal(loader.expired, 4 + 5 + 6, 'tracked multiple expiring discontinuities');
 });
 
 QUnit.test('estimates expired if an entire window elapses between live playlist updates',
@@ -468,7 +468,7 @@ function() {
                               '#EXTINF:7,\n' +
                               '5.ts\n');
 
-  QUnit.equal(loader.expired_,
+  QUnit.equal(loader.expired,
               4 + 5 + (2 * 10),
               'made a very rough estimate of expired time');
 });
@@ -663,14 +663,14 @@ QUnit.test('switches media playlists when requested', function() {
                               'low-0.ts\n');
 
   loader.media(loader.master.playlists[1]);
-  QUnit.strictEqual(loader.state, 'SWITCHING_MEDIA', 'updated the state');
+  QUnit.strictEqual(loader.state_, 'SWITCHING_MEDIA', 'updated the state');
 
   this.requests.pop().respond(200, null,
                               '#EXTM3U\n' +
                               '#EXT-X-MEDIA-SEQUENCE:0\n' +
                               '#EXTINF:10,\n' +
                               'high-0.ts\n');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'switched active media');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'switched active media');
   QUnit.strictEqual(loader.media(),
                     loader.master.playlists[1],
                     'updated the active media');
@@ -707,14 +707,14 @@ QUnit.test('can switch media playlists based on URI', function() {
                               'low-0.ts\n');
 
   loader.media('high.m3u8');
-  QUnit.strictEqual(loader.state, 'SWITCHING_MEDIA', 'updated the state');
+  QUnit.strictEqual(loader.state_, 'SWITCHING_MEDIA', 'updated the state');
 
   this.requests.pop().respond(200, null,
                               '#EXTM3U\n' +
                               '#EXT-X-MEDIA-SEQUENCE:0\n' +
                               '#EXTINF:10,\n' +
                               'high-0.ts\n');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'switched active media');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'switched active media');
   QUnit.strictEqual(loader.media(),
                     loader.master.playlists[1],
                     'updated the active media');
@@ -739,7 +739,7 @@ QUnit.test('aborts in-flight playlist refreshes when switching', function() {
   QUnit.strictEqual(this.requests[0].aborted, true, 'aborted refresh request');
   QUnit.ok(!this.requests[0].onreadystatechange,
            'onreadystatechange handlers should be removed on abort');
-  QUnit.strictEqual(loader.state, 'SWITCHING_MEDIA', 'updated the state');
+  QUnit.strictEqual(loader.state_, 'SWITCHING_MEDIA', 'updated the state');
 });
 
 QUnit.test('switching to the active playlist is a no-op', function() {
@@ -806,7 +806,7 @@ QUnit.test('switches back to loaded playlists without re-requesting them', funct
   loader.media('low.m3u8');
 
   QUnit.strictEqual(this.requests.length, 0, 'no outstanding requests');
-  QUnit.strictEqual(loader.state, 'HAVE_METADATA', 'returned to loaded playlist');
+  QUnit.strictEqual(loader.state_, 'HAVE_METADATA', 'returned to loaded playlist');
 });
 
 QUnit.test('aborts outstanding requests if switching back to an already loaded playlist',
@@ -835,7 +835,7 @@ function() {
           'aborted playlist request');
   QUnit.ok(!this.requests[0].onreadystatechange,
            'onreadystatechange handlers should be removed on abort');
-  QUnit.strictEqual(loader.state,
+  QUnit.strictEqual(loader.state_,
                     'HAVE_METADATA',
                     'returned to loaded playlist');
   QUnit.strictEqual(loader.media(),
