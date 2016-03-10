@@ -3,7 +3,7 @@
  * The main file for the HLS project.
  * License: https://github.com/videojs/videojs-contrib-hls/blob/master/LICENSE
  */
-import PlaylistLoader from './playlist-loader';
+import {getPlaylistLoadersForManifest} from './playlist-loader';
 import Playlist from './playlist';
 import xhr from './xhr';
 import {Decrypter, AsyncStream, decrypt} from './decrypter';
@@ -16,7 +16,6 @@ import SegmentLoader from './segment-loader';
 import Ranges from './ranges';
 
 const Hls = {
-  PlaylistLoader,
   Playlist,
   Decrypter,
   AsyncStream,
@@ -246,43 +245,62 @@ export default class HlsHandler extends Component {
     } else if (videojs.options.hls) {
       this.options_.withCredentials = videojs.options.hls.withCredentials;
     }
-    this.playlists = new Hls.PlaylistLoader(this.source_.src,
-                                            this.options_.withCredentials);
 
-    this.tech_.one('canplay', this.setupFirstPlay.bind(this));
+    getPlaylistLoadersForManifest(this.source_.src, this.options_.withCredentials,
+                                  (err, playlistLoaders) => {
+      if (err) {
+        // TODO handle error requesting master/single media
+      }
 
-    this.playlists.on('loadedmetadata', () => {
-      oldMediaPlaylist = this.playlists.media();
+      this.playlists = Array.from(playlistLoaders, (playlistLoader) => {
+        let playlist = {
+          loader: playlistLoader
+        };
+        Object.defineProperty(playlist, 'media', {
+          get() {
+            return this.playlistLoader.playlist;
+          }
+        });
+      });
 
-      // if this isn't a live video and preload permits, start
-      // downloading segments
-      if (oldMediaPlaylist.endList &&
+      this.selectedPlaylist = this.selectPlaylist();
+      this.segments.playlistLoader(this.selectedPlaylist.loader);
+
+      if (this.selectedPlaylist.media.endList &&
           this.tech_.preload() !== 'metadata' &&
           this.tech_.preload() !== 'none') {
         this.loadingState_ = 'segments';
-        this.segments.playlist(this.playlists.media());
         this.segments.load();
       }
-
       this.setupSourceBuffer_();
       this.setupFirstPlay();
       this.tech_.trigger('loadedmetadata');
+
+      this.segments = new SegmentLoader({
+        currentTime: this.tech_.currentTime.bind(this.tech_),
+        mediaSource: this.mediaSource,
+        withCredentials: this.options_.withCredentials
+      });
+
+      this.segments.on('progress', () => {
+        // figure out what stream the next segment should be downloaded from
+        // with the updated bandwidth information
+        this.bandwidth = this.segments.bandwidth;
+        this.selectedPlaylist = this.selectPlaylist().loader;
+        this.segments.playlistLoader(loader);
+      });
+      this.segments.on('error', () => {
+        this.blacklistCurrentPlaylist_(this.segments.error());
+      });
+
     });
 
-    this.playlists.on('error', () => {
-      this.blacklistCurrentPlaylist_(this.playlists.error);
-    });
+    this.tech_.one('canplay', this.setupFirstPlay.bind(this));
 
+    /*
     this.playlists.on('loadedplaylist', () => {
-      let updatedPlaylist = this.playlists.media();
-      let seekable;
-
-      if (!updatedPlaylist) {
-        // select the initial variant
-        this.playlists.media(this.selectPlaylist());
-        return;
-      }
-
+      // TODO move to handling in other refresh areas
+      /*
       this.segments.playlist(updatedPlaylist);
       this.updateDuration(this.playlists.media());
 
@@ -307,22 +325,7 @@ export default class HlsHandler extends Component {
         bubbles: true
       });
     });
-
-    this.segments = new SegmentLoader({
-      currentTime: this.tech_.currentTime.bind(this.tech_),
-      mediaSource: this.mediaSource,
-      withCredentials: this.options_.withCredentials
-    });
-
-    this.segments.on('progress', () => {
-      // figure out what stream the next segment should be downloaded from
-      // with the updated bandwidth information
-      this.bandwidth = this.segments.bandwidth;
-      this.playlists.media(this.selectPlaylist());
-    });
-    this.segments.on('error', () => {
-      this.blacklistCurrentPlaylist_(this.segments.error());
-    });
+    */
 
     // do nothing if the tech has been disposed already
     // this can occur if someone sets the src in player.ready(), for instance
@@ -365,6 +368,7 @@ export default class HlsHandler extends Component {
    * indefinitely.
    */
   excludeIncompatibleVariants_(media) {
+    // TODO - change logic since not working with master
     let master = this.playlists.master;
     let codecCount = 2;
     let videoCodec = null;
@@ -408,8 +412,12 @@ export default class HlsHandler extends Component {
     });
   }
 
+  selectedMedia_() {
+    return this.selectedPlaylist ? this.selectedPlaylist.media : null;
+  }
+
   setupSourceBuffer_() {
-    let media = this.playlists.media();
+    let media = this.selectedMedia_();
     let mimeType;
 
     // wait until a media playlist is available and the Media Source is
@@ -437,7 +445,7 @@ export default class HlsHandler extends Component {
    */
   setupFirstPlay() {
     let seekable;
-    let media = this.playlists.media();
+    let media = this.selectedPlaylist.media;
 
     // check that everything is ready to begin buffering
 
@@ -638,7 +646,7 @@ export default class HlsHandler extends Component {
    */
   selectPlaylist() {
     let effectiveBitrate;
-    let sortedPlaylists = this.playlists.master.playlists.slice();
+    let sortedPlaylists = Array.from(this.playlists, (playlist) => playlist.media);
     let bandwidthPlaylists = [];
     let now = +new Date();
     let i;
@@ -649,6 +657,7 @@ export default class HlsHandler extends Component {
     let resolutionBestVariant;
     let width;
     let height;
+    let resultPlaylist;
 
     sortedPlaylists.sort(Hls.comparePlaylistBandwidth);
 
@@ -744,10 +753,12 @@ export default class HlsHandler extends Component {
     }
 
     // fallback chain of variants
-    return resolutionPlusOne ||
+    resultPlaylist = resolutionPlusOne ||
       resolutionBestVariant ||
       bandwidthBestVariant ||
       sortedPlaylists[0];
+
+    return this.playlists.find((playlist) => playlist.media === resultPlaylist);
   }
 
   playlistUriToUrl(segmentRelativeUrl) {

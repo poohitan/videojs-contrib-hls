@@ -147,7 +147,6 @@ export default videojs.extend(videojs.EventTarget, {
   dispose() {
     this.abort_();
   },
-
   abort() {
     if (this.state !== 'WAITING') {
       return;
@@ -188,14 +187,36 @@ export default videojs.extend(videojs.EventTarget, {
     this.state = 'READY';
     this.fillBuffer_();
   },
-  playlist(media) {
-    this.playlist_ = media;
+  playlistLoader(playlistLoader) {
+    if (this.playlistLoader_ === playlistLoader) {
+      return;
+    }
+
+    this.playlistLoader_ = playlistLoader;
+
+    this.playlistLoader_.on('loaded', () => {
+      this.updatePlaylist_(this.playlistLoader_.playlist);
+    });
+
+    this.playlistLoader_.on('refresh', () => {
+      this.updatePlaylist_(this.playlistLoader_.playlist);
+      this.load();
+    });
+
+    this.playlistLoader_.on('error', () => {
+      // TODO any more advanced error handling
+      this.error(this.playlistLoader.error_);
+      this.trigger('error');
+    });
+  },
+  updatePlaylist_(playlist) {
+    this.playlist_ = playlist;
 
     // if we were unpaused but waiting for a playlist, start
     // buffering now
-    if (media && this.state === 'INIT' && !this.paused()) {
+    if (this.state === 'INIT' && !this.paused()) {
       this.state = 'READY';
-      return this.fillBuffer_();
+      this.fillBuffer_();
     }
   },
   /**
