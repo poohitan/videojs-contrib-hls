@@ -30,6 +30,7 @@ QUnit.module('MasterPlaylistController', {
       src: 'manifest/master.m3u8',
       type: 'application/vnd.apple.mpegurl'
     });
+    this.clock.tick(1);
     /* eslint-disable */
     if (!this.player.tech_.hls) {
       console.log(this.player.tech_);
