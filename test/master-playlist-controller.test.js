@@ -30,9 +30,6 @@ QUnit.module('MasterPlaylistController', {
       src: 'manifest/master.m3u8',
       type: 'application/vnd.apple.mpegurl'
     });
-    this.player.tech_.triggerReady();
-    this.clock.tick(1);
-    openMediaSource(this.player, this.clock);
     /* eslint-disable */
     if (!this.player.tech_.hls) {
       console.log(this.player.tech_);
@@ -43,6 +40,7 @@ QUnit.module('MasterPlaylistController', {
   afterEach() {
     this.env.restore();
     this.mse.restore();
+    this.player.dispose();
     videojs.Hls.supportsNativeHls = this.origSupportsNativeHls;
   }
 });
