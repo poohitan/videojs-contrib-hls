@@ -252,6 +252,9 @@ export default class HlsHandler extends Component {
 const HlsSourceHandler = function(mode) {
   return {
     canHandleSource(srcObj) {
+      /* eslint-disable */
+      console.log('Asking if we can handle source: ' + srcObj.type);
+      /* eslint-enable */
       return HlsSourceHandler.canPlayType(srcObj.type);
     },
     handleSource(source, tech) {
