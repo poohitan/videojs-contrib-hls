@@ -28,16 +28,14 @@ QUnit.module('MasterPlaylistController', {
     /* eslint-disable */
     console.log('Creating player');
     this.player = createPlayer();
-    console.log('Created player, triggering ready');
-    this.player.tech_.triggerReady();
-    console.log('Triggered ready, adding src');
-    console.log(this.player.techName_);
+    console.log('Tech: ' + this.player.techName_);
+    console.log('Adding src');
     this.player.src({
       src: 'manifest/master.m3u8',
       type: 'application/vnd.apple.mpegurl'
     });
-    console.log(this.player.techName_);
-    console.log('Added source');
+    console.log('Triggering ready');
+    this.player.tech_.triggerReady();
     if (!this.player.tech_.hls) {
       console.log(this.player.tech_);
     }
