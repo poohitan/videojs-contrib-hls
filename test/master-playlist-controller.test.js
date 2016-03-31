@@ -1,8 +1,9 @@
 import QUnit from 'qunit';
 import videojs from 'video.js';
-/* eslint-disable no-unused-vars */
+/* eslint-disable */
 // needed so Hls can be registered with videojs
 import videojsContribHls from '../src/videojs-contrib-hls';
+console.log(videojs.Hls);
 /* eslint-enable */
 import {
   useFakeEnvironment,
