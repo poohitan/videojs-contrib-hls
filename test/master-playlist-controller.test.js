@@ -15,16 +15,75 @@ import {
 import MasterPlaylistController from '../src/master-playlist-controller';
 import Playlist from '../src/playlist';
 
+const Flash = videojs.getComponent('Flash');
+let nextId = 0;
+
+// do a shallow copy of the properties of source onto the target object
+const merge = function(target, source) {
+  let name;
+
+  for (name in source) {
+    target[name] = source[name];
+  }
+};
+
 QUnit.module('MasterPlaylistController', {
   beforeEach() {
     this.env = useFakeEnvironment();
     this.clock = this.env.clock;
     this.requests = this.env.requests;
     this.mse = useFakeMediaSource();
+    this.old = {};
+
+    // mock out Flash features for phantomjs
+    this.old.Flash = videojs.mergeOptions({}, Flash);
+    /* eslint-disable camelcase */
+    Flash.embed = function(swf, flashVars) {
+      let el = document.createElement('div');
+
+      el.id = 'vjs_mock_flash_' + nextId++;
+      el.className = 'vjs-tech vjs-mock-flash';
+      el.duration = Infinity;
+      el.vjs_load = function() {};
+      el.vjs_getProperty = function(attr) {
+        if (attr === 'buffered') {
+          return [[0, 0]];
+        }
+        return el[attr];
+      };
+      el.vjs_setProperty = function(attr, value) {
+        el[attr] = value;
+      };
+      el.vjs_src = function() {};
+      el.vjs_play = function() {};
+      el.vjs_discontinuity = function() {};
+
+      if (flashVars.autoplay) {
+        el.autoplay = true;
+      }
+      if (flashVars.preload) {
+        el.preload = flashVars.preload;
+      }
+
+      el.currentTime = 0;
+
+      return el;
+    };
+    /* eslint-enable camelcase */
+    this.old.FlashSupported = Flash.isSupported;
+    Flash.isSupported = function() {
+      return true;
+    };
+
+    // store functionality that some tests need to mock
+    this.old.GlobalOptions = videojs.mergeOptions(videojs.options);
 
     // force the HLS tech to run
     this.origSupportsNativeHls = videojs.Hls.supportsNativeHls;
     videojs.Hls.supportsNativeHls = false;
+
+    this.old.Decrypt = videojs.Hls.Decrypter;
+    videojs.Hls.Decrypter = function() {};
 
     /* eslint-disable */
     console.log('Creating player');
@@ -46,8 +105,15 @@ QUnit.module('MasterPlaylistController', {
   afterEach() {
     this.env.restore();
     this.mse.restore();
+
+    merge(videojs.options, this.old.GlobalOptions);
+    Flash.isSupported = this.old.FlashSupported;
+    merge(Flash, this.old.Flash);
+
+    videojs.Hls.supportsNativeHls = this.old.NativeHlsSupport;
+    videojs.Hls.Decrypter = this.old.Decrypt;
+
     this.player.dispose();
-    videojs.Hls.supportsNativeHls = this.origSupportsNativeHls;
   }
 });
 
