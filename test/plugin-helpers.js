@@ -2,6 +2,8 @@ import document from 'global/document';
 import sinon from 'sinon';
 import videojs from 'video.js';
 /* eslint-disable no-unused-vars */
+// needed so Hls can be registered with videojs
+import { Hls } from '../src/videojs-contrib-hls';
 // needed so MediaSource can be registered with videojs
 import MediaSource from 'videojs-contrib-media-sources';
 /* eslint-enable */

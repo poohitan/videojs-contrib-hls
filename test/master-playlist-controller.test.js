@@ -8,10 +8,6 @@ import {
   openMediaSource
 } from './plugin-helpers.js';
 import MasterPlaylistController from '../src/master-playlist-controller';
-/* eslint-disable no-unused-vars */
-// we need this so that it can register hls with videojs
-import { Hls } from '../src/videojs-contrib-hls';
-/* eslint-enable no-unused-vars */
 import Playlist from '../src/playlist';
 
 QUnit.module('MasterPlaylistController', {
