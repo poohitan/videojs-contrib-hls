@@ -31,10 +31,12 @@ QUnit.module('MasterPlaylistController', {
     console.log('Created player, triggering ready');
     this.player.tech_.triggerReady();
     console.log('Triggered ready, adding src');
+    console.log(this.player.techName_);
     this.player.src({
       src: 'manifest/master.m3u8',
       type: 'application/vnd.apple.mpegurl'
     });
+    console.log(this.player.techName_);
     console.log('Added source');
     if (!this.player.tech_.hls) {
       console.log(this.player.tech_);

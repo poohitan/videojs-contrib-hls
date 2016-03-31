@@ -366,6 +366,10 @@ if (window.Uint8Array) {
   videojs.getComponent('Flash').registerSourceHandler(HlsSourceHandler('flash'));
 }
 
+/* eslint-disable */
+console.log('REGISTERING HLS');
+/* eslint-enable */
+
 videojs.HlsHandler = HlsHandler;
 videojs.HlsSourceHandler = HlsSourceHandler;
 videojs.Hls = Hls;
