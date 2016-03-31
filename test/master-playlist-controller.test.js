@@ -96,6 +96,7 @@ QUnit.module('MasterPlaylistController', {
     });
     console.log('Triggering ready');
     this.player.tech_.triggerReady();
+    this.clock.tick(1);
     if (!this.player.tech_.hls) {
       console.log(this.player.tech_);
     }
