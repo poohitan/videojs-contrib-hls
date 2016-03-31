@@ -262,6 +262,9 @@ const HlsSourceHandler = function(mode) {
           tech.trigger('loadstart');
         }, 1);
       }
+      /* eslint-disable */
+      console.log('HANDLING SOURCE');
+      /* eslint-enable */
       tech.hls = new HlsHandler(tech, {
         source,
         mode

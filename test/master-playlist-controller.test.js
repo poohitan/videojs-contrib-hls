@@ -25,12 +25,15 @@ QUnit.module('MasterPlaylistController', {
     this.origSupportsNativeHls = videojs.Hls.supportsNativeHls;
     videojs.Hls.supportsNativeHls = false;
 
+    /* eslint-disable */
+    console.log('Creating player');
     this.player = createPlayer();
+    console.log('Created player, adding source');
     this.player.src({
       src: 'manifest/master.m3u8',
       type: 'application/vnd.apple.mpegurl'
     });
-    /* eslint-disable */
+    console.log('Added source');
     if (!this.player.tech_.hls) {
       console.log(this.player.tech_);
     }
