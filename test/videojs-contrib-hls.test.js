@@ -1,6 +1,5 @@
 /* eslint-disable max-len */
 
-import document from 'global/document';
 import videojs from 'video.js';
 import QUnit from 'qunit';
 import testDataManifests from './test-manifests.js';
@@ -10,24 +9,14 @@ import {
   createPlayer,
   openMediaSource,
   standardXHRResponse,
-  absoluteUrl
+  absoluteUrl,
+  merge,
+  mockFlash
 } from './plugin-helpers.js';
 /* eslint-disable no-unused-vars */
 // we need this so that it can register hls with videojs
 import {HlsSourceHandler, HlsHandler, Hls} from '../src/videojs-contrib-hls';
 /* eslint-enable no-unused-vars */
-
-const Flash = videojs.getComponent('Flash');
-let nextId = 0;
-
-// do a shallow copy of the properties of source onto the target object
-const merge = function(target, source) {
-  let name;
-
-  for (name in source) {
-    target[name] = source[name];
-  }
-};
 
 QUnit.module('HLS', {
   beforeEach() {
@@ -35,47 +24,8 @@ QUnit.module('HLS', {
     this.requests = this.env.requests;
     this.mse = useFakeMediaSource();
     this.clock = this.env.clock;
+    this.mockFlash = mockFlash();
     this.old = {};
-
-    // mock out Flash features for phantomjs
-    this.old.Flash = videojs.mergeOptions({}, Flash);
-    /* eslint-disable camelcase */
-    Flash.embed = function(swf, flashVars) {
-      let el = document.createElement('div');
-
-      el.id = 'vjs_mock_flash_' + nextId++;
-      el.className = 'vjs-tech vjs-mock-flash';
-      el.duration = Infinity;
-      el.vjs_load = function() {};
-      el.vjs_getProperty = function(attr) {
-        if (attr === 'buffered') {
-          return [[0, 0]];
-        }
-        return el[attr];
-      };
-      el.vjs_setProperty = function(attr, value) {
-        el[attr] = value;
-      };
-      el.vjs_src = function() {};
-      el.vjs_play = function() {};
-      el.vjs_discontinuity = function() {};
-
-      if (flashVars.autoplay) {
-        el.autoplay = true;
-      }
-      if (flashVars.preload) {
-        el.preload = flashVars.preload;
-      }
-
-      el.currentTime = 0;
-
-      return el;
-    };
-    /* eslint-enable camelcase */
-    this.old.FlashSupported = Flash.isSupported;
-    Flash.isSupported = function() {
-      return true;
-    };
 
     // store functionality that some tests need to mock
     this.old.GlobalOptions = videojs.mergeOptions(videojs.options);
@@ -94,10 +44,9 @@ QUnit.module('HLS', {
   afterEach() {
     this.env.restore();
     this.mse.restore();
+    this.mockFlash.restore();
 
     merge(videojs.options, this.old.GlobalOptions);
-    Flash.isSupported = this.old.FlashSupported;
-    merge(Flash, this.old.Flash);
 
     videojs.Hls.supportsNativeHls = this.old.NativeHlsSupport;
     videojs.Hls.Decrypter = this.old.Decrypt;

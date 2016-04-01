@@ -6,7 +6,6 @@ import videojs from 'video.js';
 import videojsContribHls from '../src/videojs-contrib-hls';
 // needed so MediaSource can be registered with videojs
 import MediaSource from 'videojs-contrib-media-sources';
-console.log(videojs.Hls);
 /* eslint-enable */
 import testDataManifests from './test-manifests.js';
 
@@ -271,4 +270,68 @@ export const absoluteUrl = function(relativeUrl) {
         .concat(relativeUrl)
         .join('/')
     );
+};
+
+// do a shallow copy of the properties of source onto the target object
+export const merge = function(target, source) {
+  let name;
+
+  for (name in source) {
+    target[name] = source[name];
+  }
+};
+
+const Flash = videojs.getComponent('Flash');
+
+let nextId = 0;
+
+export const mockFlash = function() {
+  let old = {};
+
+  old.Flash = videojs.mergeOptions({}, Flash);
+  /* eslint-disable camelcase */
+  Flash.embed = function(swf, flashVars) {
+    let el = document.createElement('div');
+
+    el.id = 'vjs_mock_flash_' + nextId++;
+    el.className = 'vjs-tech vjs-mock-flash';
+    el.duration = Infinity;
+    el.vjs_load = function() {};
+    el.vjs_getProperty = function(attr) {
+      if (attr === 'buffered') {
+        return [[0, 0]];
+      }
+      return el[attr];
+    };
+    el.vjs_setProperty = function(attr, value) {
+      el[attr] = value;
+    };
+    el.vjs_src = function() {};
+    el.vjs_play = function() {};
+    el.vjs_discontinuity = function() {};
+
+    if (flashVars.autoplay) {
+      el.autoplay = true;
+    }
+    if (flashVars.preload) {
+      el.preload = flashVars.preload;
+    }
+
+    el.currentTime = 0;
+
+    return el;
+  };
+  /* eslint-enable camelcase */
+
+  old.FlashSupported = Flash.isSupported;
+  Flash.isSupported = function() {
+    return true;
+  };
+
+  return {
+    restore() {
+      Flash.isSupported = old.FlashSupported;
+      merge(Flash, old.Flash);
+    }
+  };
 };

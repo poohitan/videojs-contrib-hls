@@ -252,9 +252,6 @@ export default class HlsHandler extends Component {
 const HlsSourceHandler = function(mode) {
   return {
     canHandleSource(srcObj) {
-      /* eslint-disable */
-      console.log('Asking if we can handle source: ' + srcObj.type);
-      /* eslint-enable */
       return HlsSourceHandler.canPlayType(srcObj.type);
     },
     handleSource(source, tech) {
@@ -265,9 +262,6 @@ const HlsSourceHandler = function(mode) {
           tech.trigger('loadstart');
         }, 1);
       }
-      /* eslint-disable */
-      console.log('HANDLING SOURCE');
-      /* eslint-enable */
       tech.hls = new HlsHandler(tech, {
         source,
         mode
@@ -368,10 +362,6 @@ if (MediaSource.supportsNativeMediaSources()) {
 if (window.Uint8Array) {
   videojs.getComponent('Flash').registerSourceHandler(HlsSourceHandler('flash'));
 }
-
-/* eslint-disable */
-console.log('REGISTERING HLS');
-/* eslint-enable */
 
 videojs.HlsHandler = HlsHandler;
 videojs.HlsSourceHandler = HlsSourceHandler;
