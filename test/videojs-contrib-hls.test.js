@@ -93,6 +93,9 @@ QUnit.test('Seeking requests correct byte range', function() {
   this.clock.tick(1);
   this.player.currentTime(40);
   this.clock.tick(1);
+  /* eslint-disable */
+  console.log(this.requests);
+  /* eslint-enable */
   QUnit.equal(this.requests[2].headers.Range, 'bytes=2299992-2835603');
 });
 
