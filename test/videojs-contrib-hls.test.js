@@ -1709,7 +1709,6 @@ QUnit.test('live playlist starts three target durations before live', function()
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
 
-  hls.mediaSource.readyState = 'open';
   hls.mediaSource.trigger('sourceopen');
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
@@ -1735,11 +1734,16 @@ QUnit.test('live playlist starts three target durations before live', function()
   };
   this.tech.trigger('play');
   this.clock.tick(1);
+
+  QUnit.equal(this.requests.length, 1, 'one outstanding segment request');
+  QUnit.strictEqual(this.requests[0].url,
+                    absoluteUrl('manifest/0.ts'),
+                    'the first segment is requested');
+  standardXHRResponse(this.requests.shift());
+
   QUnit.equal(this.tech.currentTime(),
               hls.seekable().end(0),
               'seeked to the seekable end');
-
-  QUnit.equal(this.requests.length, 1, 'begins buffering');
 });
 
 QUnit.module('HLS - Encryption', {
