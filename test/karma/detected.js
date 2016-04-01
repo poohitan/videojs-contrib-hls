@@ -4,17 +4,12 @@ var common = require('./common');
 
 module.exports = function(config) {
 
-  // Travis CI should run in its available Firefox headless browser.
   if (process.env.TRAVIS) {
-
     config.set(common({
-      customLaunchers: {
-        Chrome_travis_ci: {
-            base: 'Chrome',
-            flags: ['--no-sandbox']
-        }
-      },
-      browsers: ['Chrome_travis_ci']
+      browsers: ['Chrome_travis_ci'],
+      plugins: [
+        'karma-chrome-launcher'
+      ]
     }))
   } else {
     config.set(common({
