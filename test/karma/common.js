@@ -42,7 +42,7 @@ var DEFAULTS = {
     ]
   },
   customLaunchers: {
-    Chrome_travis_ci: {
+    travisChrome: {
       base: 'Chrome',
       flags: ['--no-sandbox']
     }

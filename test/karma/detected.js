@@ -6,7 +6,7 @@ module.exports = function(config) {
 
   if (process.env.TRAVIS) {
     config.set(common({
-      browsers: ['google-chrome'],
+      browsers: ['travisChrome'],
       plugins: [
         'karma-chrome-launcher'
       ]
