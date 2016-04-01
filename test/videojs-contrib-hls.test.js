@@ -93,12 +93,6 @@ QUnit.test('Seeking requests correct byte range', function() {
   this.clock.tick(1);
   this.player.currentTime(40);
   this.clock.tick(1);
-  /* eslint-disable */
-  this.requests.forEach((request) => {
-    console.log(request.headers);
-    console.log('---');
-  });
-  /* eslint-enable */
   QUnit.equal(this.requests[2].headers.Range, 'bytes=2299992-2835603');
 });
 
@@ -1715,6 +1709,7 @@ QUnit.test('live playlist starts three target durations before live', function()
     type: 'application/vnd.apple.mpegurl'
   }, this.tech);
 
+  hls.mediaSource.readyState = 'open';
   hls.mediaSource.trigger('sourceopen');
   this.requests.shift().respond(200, null,
                                 '#EXTM3U\n' +
