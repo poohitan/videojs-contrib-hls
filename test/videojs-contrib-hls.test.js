@@ -87,8 +87,8 @@ QUnit.test('Seeking requests correct byte range', function() {
     src: 'manifest/playlist.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
-  this.player.tech_.trigger('play');
   openMediaSource(this.player, this.clock);
+  this.player.tech_.trigger('play');
   standardXHRResponse(this.requests[0]);
   this.clock.tick(1);
   this.player.currentTime(40);
@@ -1553,7 +1553,7 @@ QUnit.test('resolves relative key URLs against the playlist', function() {
               'resolves the key URL');
 });
 
-QUnit.test('adds 1 default  audio track if we have not parsed any, and the playlist is loaded', function() {
+QUnit.test('adds 1 default audio track if we have not parsed any, and the playlist is loaded', function() {
   this.player.src({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
@@ -1574,10 +1574,9 @@ QUnit.test('adds audio tracks if we have parsed some from a playlist', function(
     src: 'manifest/multipleAudioGroups.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
+  openMediaSource(this.player, this.clock);
 
   QUnit.equal(this.player.audioTracks().length, 0, `zero audio tracks at load time`);
-
-  openMediaSource(this.player, this.clock);
 
   // master
   standardXHRResponse(this.requests.shift());
