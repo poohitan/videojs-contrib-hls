@@ -2,7 +2,7 @@
  * @file master-playlist-controller.js
  */
 import PlaylistLoader from './playlist-loader';
-import SegmentLoader from './segment-loader';
+import NewSegmentLoader from './new-segment-loader';
 import Ranges from './ranges';
 import videojs from 'video.js';
 import HlsAudioTrack from './hls-audio-track';
@@ -90,9 +90,9 @@ export default class MasterPlaylistController extends videojs.EventTarget {
     };
 
     // combined audio/video or just video when alternate audio track is selected
-    this.mainSegmentLoader_ = new SegmentLoader(segmentLoaderOptions);
+    this.mainSegmentLoader_ = new NewSegmentLoader(segmentLoaderOptions);
     // alternate audio track
-    this.audioSegmentLoader_ = new SegmentLoader(segmentLoaderOptions);
+    this.audioSegmentLoader_ = new NewSegmentLoader(segmentLoaderOptions);
 
     if (!url) {
       throw new Error('A non-empty playlist URL is required');
@@ -109,9 +109,9 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       // if this isn't a live video and preload permits, start
       // downloading segments
       if (media.endList && this.tech_.preload() !== 'none') {
-        this.mainSegmentLoader_.playlist(media, this.requestOptions_);
         this.mainSegmentLoader_.expired(this.masterPlaylistLoader_.expired_);
-        this.mainSegmentLoader_.load();
+        this.mainSegmentLoader_.playlist(media, this.requestOptions_);
+        this.mainSegmentLoader_.resume();
       }
 
       this.setupSourceBuffer_();
@@ -121,7 +121,6 @@ export default class MasterPlaylistController extends videojs.EventTarget {
 
     this.masterPlaylistLoader_.on('loadedplaylist', () => {
       let updatedPlaylist = this.masterPlaylistLoader_.media();
-      let seekable;
 
       if (!updatedPlaylist) {
         // select the initial variant
@@ -142,12 +141,6 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       this.mainSegmentLoader_.playlist(updatedPlaylist, this.requestOptions_);
       this.mainSegmentLoader_.expired(this.masterPlaylistLoader_.expired_);
       this.updateDuration();
-
-      // update seekable
-      seekable = this.seekable();
-      if (!updatedPlaylist.endList && seekable.length !== 0) {
-        this.mediaSource.addSeekableRange_(seekable.start(0), seekable.end(0));
-      }
     });
 
     this.masterPlaylistLoader_.on('error', () => {
@@ -162,7 +155,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       let media = this.masterPlaylistLoader_.media();
       let requestTimeout = (this.masterPlaylistLoader_.targetDuration * 1.5) * 1000;
 
-      this.mainSegmentLoader_.abort();
+      this.mainSegmentLoader_.clearEverything();
 
       // If we don't have any more available playlists, we don't want to
       // timeout the request.
@@ -178,7 +171,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       // on `loadedplaylist`
       this.mainSegmentLoader_.playlist(media, this.requestOptions_);
       this.mainSegmentLoader_.expired(this.masterPlaylistLoader_.expired_);
-      this.mainSegmentLoader_.load();
+      this.mainSegmentLoader_.resume();
 
       this.tech_.trigger({
         type: 'mediachange',
@@ -189,7 +182,14 @@ export default class MasterPlaylistController extends videojs.EventTarget {
     this.mainSegmentLoader_.on('progress', () => {
       // figure out what stream the next segment should be downloaded from
       // with the updated bandwidth information
-      this.masterPlaylistLoader_.media(this.selectPlaylist());
+      let media = this.selectPlaylist();
+      this.masterPlaylistLoader_.media(media);
+
+      // update seekable
+      let seekable = this.seekable();
+      if (!media.endList && seekable.length !== 0) {
+        this.mediaSource.addSeekableRange_(seekable.start(0), seekable.end(0));
+      }
 
       this.trigger('progress');
     });
@@ -201,7 +201,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
     this.audioSegmentLoader_.on('error', () => {
       videojs.log.warn('Problem encountered with the current alternate audio track' +
                        '. Switching back to default.');
-      this.audioSegmentLoader_.abort();
+      this.audioSegmentLoader_.clearEverything();
       this.audioPlaylistLoader_ = null;
       this.useAudio();
     });
@@ -295,9 +295,9 @@ export default class MasterPlaylistController extends videojs.EventTarget {
    * Call load on our SegmentLoaders
    */
   load() {
-    this.mainSegmentLoader_.load();
+    this.mainSegmentLoader_.resume();
     if (this.audioPlaylistLoader_) {
-      this.audioSegmentLoader_.load();
+      this.audioSegmentLoader_.resume();
     }
   }
 
@@ -346,7 +346,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
     let loader = track.getLoader(this.activeAudioGroup());
 
     if (!loader) {
-      this.mainSegmentLoader_.clearBuffer();
+      this.mainSegmentLoader_.clearEverything();
       return;
     }
 
@@ -356,8 +356,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
 
     if (this.audioPlaylistLoader_.started) {
       this.audioPlaylistLoader_.load();
-      this.audioSegmentLoader_.load();
-      this.audioSegmentLoader_.clearBuffer();
+      this.audioSegmentLoader_.clearEverything();
       return;
     }
 
@@ -373,7 +372,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       // permits, start downloading segments
       if (!this.tech_.paused() ||
           (media.endList && this.tech_.preload() !== 'none')) {
-        this.audioSegmentLoader_.load();
+        this.audioSegmentLoader_.resume();
       }
 
       if (!media.endList) {
@@ -402,12 +401,13 @@ export default class MasterPlaylistController extends videojs.EventTarget {
     this.audioPlaylistLoader_.on('error', () => {
       videojs.log.warn('Problem encountered loading the alternate audio track' +
                        '. Switching back to default.');
-      this.audioSegmentLoader_.abort();
+      this.audioSegmentLoader_.clearEverything();
+      this.audioSegmentLoader_.pause();
       this.audioPlaylistLoader_ = null;
       this.useAudio();
     });
 
-    this.audioSegmentLoader_.clearBuffer();
+    this.audioSegmentLoader_.clearEverything();
     this.audioPlaylistLoader_.start();
   }
 
@@ -426,7 +426,6 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       this.masterPlaylistLoader_.media(media);
       this.mainSegmentLoader_.sourceUpdater_.remove(Math.min(this.tech_.duration(), this.tech_.currentTime() + 5),
                                                     Infinity);
-      this.mainSegmentLoader_.mediaIndex = null;
     }
   }
 
@@ -594,15 +593,15 @@ export default class MasterPlaylistController extends videojs.EventTarget {
 
     // cancel outstanding requests so we begin buffering at the new
     // location
-    this.mainSegmentLoader_.abort();
+    this.mainSegmentLoader_.clearEverything();
     if (this.audioPlaylistLoader_) {
-      this.audioSegmentLoader_.abort();
+      this.audioSegmentLoader_.clearEverything();
     }
 
     if (!this.tech_.paused()) {
-      this.mainSegmentLoader_.load();
+      this.mainSegmentLoader_.resume();
       if (this.audioPlaylistLoader_) {
-        this.audioSegmentLoader_.load();
+        this.audioSegmentLoader_.resume();
       }
     }
   }

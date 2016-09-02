@@ -89,7 +89,8 @@
     "video.js": "^5.10.1",
     "videojs-contrib-media-sources": "^3.1.0",
     "videojs-swf": "^5.0.2",
-    "global": "^4.3.0"
+    "global": "^4.3.0",
+    "mux.js": "https://github.com/mjneil/mux.js#ts-inspector"
   },
   "devDependencies": {
     "babel": "^5.8.0",
