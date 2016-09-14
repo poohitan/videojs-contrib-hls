@@ -148,7 +148,7 @@ export default class MasterPlaylistController extends videojs.EventTarget {
     });
 
     this.masterPlaylistLoader_.on('mediachanging', () => {
-      this.mainSegmentLoader_.pause();
+      // this.mainSegmentLoader_.pause();
     });
 
     this.masterPlaylistLoader_.on('mediachange', () => {
@@ -190,6 +190,8 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       if (!media.endList && seekable.length !== 0) {
         this.mediaSource.addSeekableRange_(seekable.start(0), seekable.end(0));
       }
+
+      console.log('progress');
 
       this.trigger('progress');
     });
@@ -477,11 +479,15 @@ export default class MasterPlaylistController extends videojs.EventTarget {
       this.masterPlaylistLoader_.trigger('firstplay');
       this.hasPlayed_ = true;
 
-      // seek to the latest media position for live videos
-      seekable = this.seekable();
-      if (seekable.length) {
-        this.tech_.setCurrentTime(seekable.end(0));
-      }
+      this.on('progress', () => {
+        let seekable = this.seekable();
+
+        if (seekable.length) {
+          this.tech_.setCurrentTime(seekable.end(0));
+          this.mainSegmentLoader_.seek();
+          console.log('seekable live:', seekable.length, seekable.start(0), seekable.end(0));
+        }
+      });
 
       this.load();
 
@@ -593,16 +599,9 @@ export default class MasterPlaylistController extends videojs.EventTarget {
 
     // cancel outstanding requests so we begin buffering at the new
     // location
-    this.mainSegmentLoader_.clearEverything();
+    this.mainSegmentLoader_.seek();
     if (this.audioPlaylistLoader_) {
-      this.audioSegmentLoader_.clearEverything();
-    }
-
-    if (!this.tech_.paused()) {
-      this.mainSegmentLoader_.resume();
-      if (this.audioPlaylistLoader_) {
-        this.audioSegmentLoader_.resume();
-      }
+      this.mainSegmentLoader_.seek();
     }
   }
 

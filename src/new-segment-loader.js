@@ -4,7 +4,12 @@ import SourceUpdater from './source-updater';
 import Config from './config';
 import {inspect as inspectSegment} from 'mux.js/lib/tools/ts-inspector.js';
 import Ranges from './ranges';
-import {getMediaIndexForTime_} from './playlist';
+import {getMediaIndexForTime_, duration} from './playlist';
+import BinaryFind from './rules/binary-find';
+import MediaIndexPlusPlus from './rules/media-index-plus-plus';
+import Loop from './rules/loop';
+
+const LIVE_RULES = [MediaIndexPlusPlus, BinaryFind, Loop];
 
 // milliseconds
 const GET_SOME_VIDEO_DELAY = 500;
@@ -60,6 +65,8 @@ export default class NewSegmentLoader extends videojs.EventTarget {
     // start paused
     this.pause();
 
+    this.rules = LIVE_RULES.map(rule => new rule());
+
     this.getSomeVideoInterval = window.setInterval(
       this.getSomeVideo.bind(this), GET_SOME_VIDEO_DELAY);
   }
@@ -71,8 +78,23 @@ export default class NewSegmentLoader extends videojs.EventTarget {
   }
 
   playlist(playlist, xhrOptions) {
+    let newPlaylist = this.playlist !== playlist;
+
     this.playlist_ = playlist;
     this.xhrOptions_ = xhrOptions;
+
+    if (newPlaylist) {
+      this.newPlaylist_ = true;
+
+      if (this.sourceUpdater_ && !Ranges.findRange(this.buffered(), this.currentTime_())) {
+        this.setCurrentTime_(duration(this.playlist_.segments.length - 3));
+      }
+    }
+  }
+
+  seek() {
+    this.clearEverything();
+    this.seek_ = true;
   }
 
   expired(expiredTime) {
@@ -137,20 +159,54 @@ export default class NewSegmentLoader extends videojs.EventTarget {
         !this.playlist_ ||
         !this.playlist_.segments.length ||
         this.plentyOfBuffer()) {
+      console.log({
+        paused: this.paused_,
+        already: this.alreadyGettingSomeVideo_,
+        source: this.sourceUpdater_,
+        playlist: this.playlist_,
+      });
       return;
     }
 
     this.alreadyGettingSomeVideo_ = true;
 
-    let mediaIndex = this.getNextMediaIndex({
+    let isNewPlaylist = this.newPlaylist_;
+    let current = {
+      rule: 'none',
+      index: -1
+    };
+
+    if (Ranges.findRange(this.buffered(), this.currentTime_()).length > 0) {
+      this.newPlaylist_ = false;
+      this.seek_ = false;
+    }
+
+    console.log({
       playlist: this.playlist_,
       currentTime: this.currentTime_(),
       buffered: this.buffered(),
+      expired: this.expired_,
+      isSeeking: this.seek_,
+      isNewPlaylist: this.newPlaylist_,
+      current
+    });
+    this.rules.forEach((rule) => {
+      current = rule.getIndex({
+        playlist: this.playlist_,
+        currentTime: this.currentTime_(),
+        buffered: this.buffered(),
+        expired: this.expired_,
+        isSeeking: this.seek_,
+        isNewPlaylist: this.newPlaylist_,
+        current
+      });
     });
 
-    console.log(mediaIndex);
+    console.log(current.rule, current.index);
 
-    if (mediaIndex < 0) {
+    let mediaIndex = current.index;
+
+    if (mediaIndex < 0 || mediaIndex > this.playlist_.segments.length - 1) {
       return;
     }
 
@@ -200,7 +256,7 @@ export default class NewSegmentLoader extends videojs.EventTarget {
 
     // trigger an event for other errors
     if (!request.aborted && err) {
-      this.pause();
+      // this.pause();
       this.error({
         status: request.status,
         message: request === this.keyXhr_ ?
@@ -251,7 +307,7 @@ export default class NewSegmentLoader extends videojs.EventTarget {
           xhr: request
         });
         this.state = 'READY';
-        this.pause();
+        // this.pause();
         return this.trigger('error');
       }
 
@@ -304,6 +360,8 @@ export default class NewSegmentLoader extends videojs.EventTarget {
     }
   }
 
+  // TODO remove and instead use baseMediaDecodeTime and duration
+
   updateTimestampOffset(segment) {
     if (this.playlist_ !== this.bufferPlaylist_ ||
         this.playlist_.discontinuityStarts[segment.uri]) {
@@ -331,6 +389,8 @@ export default class NewSegmentLoader extends videojs.EventTarget {
     this.sourceUpdater_.appendBuffer(segmentInfo.bytes, () => {
       this.trigger('progress');
 
+      this.updateTimeline(segmentInfo);
+
       // TODO check end of stream
 
       this.alreadyGettingSomeVideo_ = false;
@@ -344,99 +404,64 @@ export default class NewSegmentLoader extends videojs.EventTarget {
     window.clearInterval(this.getSomeVideoInterval);
   }
 
-  findNextNonBuffered({playlist, buffered, index}) {
-    for (; index <= playlist.segments.length; index++) {
-      let segment = playlist.segments[index];
+  /**
+   * annotate the segment with any start and end time information
+   * added by the media processing
+   *
+   * @private
+   * @param {Object} segmentInfo annotate a segment with time info
+   */
+  updateTimeline(segmentInfo) {
+    let segmentEnd;
+    let timelineUpdated = false;
+    let playlist = segmentInfo.playlist;
 
-      if (!segment.timeInfo) {
-        return index;
-      }
+    let segment = playlist.segments[segmentInfo.mediaIndex];
 
-      let midpoint = (segment.timeInfo.video[1].dts - segment.timeInfo.video[0].dts) / 2;
-
-      if (!Ranges.findRange(buffered, midpoint)) {
-        return index;
-      }
+    // Update segment meta-data (duration and end-point) based on timeline
+    if (segment &&
+        segmentInfo &&
+        segmentInfo.playlist.uri === this.playlist_.uri) {
+      segmentEnd = Ranges.findSoleUncommonTimeRangesEnd(segmentInfo.buffered,
+                                                        this.sourceUpdater_.buffered());
+      timelineUpdated = updateSegmentMetadata(playlist,
+                                              segmentInfo.mediaIndex,
+                                              segmentEnd);
     }
 
-    return index;
-  }
-
-  // TODO remove
-  bufferStr(buffer) {
-    let bufferStr = ''
-
-    for (let i = 0; i < buffer.length; i++) {
-      bufferStr += ` ${buffer.start(i)} => ${buffer.end(i)}`;
-    }
-
-    return bufferStr;
-  }
-
-  indexForTime(playlist, time, expired) {
-    let index = playlist.segments.findIndex((segment) => {
-      return segment.timeInfo &&
-        segment.timeInfo.video &&
-        segment.timeInfo.video[0].dts <= time &&
-        segment.timeInfo.video[1].dts >= time;
-    });
-
-    if (index === -1) {
-      return getMediaIndexForTime_(playlist, time, expired);
-    }
-    return index;
-  }
-
-  getNextMediaIndex({playlist, currentTime, buffered}) {
-    console.log('Getting with: ', {
-      currentTime,
-      seg: playlist.segments[0],
-      buffered: this.bufferStr(buffered)
-    });
-
-    let currentBuffered = Ranges.findRange(buffered, currentTime);
-
-    if (currentBuffered.length > 0) {
-      // playing, grab next non buffered range from current buffered range
-      let currentMediaIndex = playlist.segments.findIndex((segment) => {
-        return segment.timeInfo &&
-          segment.timeInfo.video[0].dts <= currentTime &&
-          segment.timeInfo.video[1].dts >= currentTime;
-      });
-
-      if (currentMediaIndex < 0) {
-        return 0;
-      }
-
-      console.log('Finding with ' + currentMediaIndex);
-      return this.findNextNonBuffered({playlist, buffered, index: currentMediaIndex});
-    }
-
-    let index = this.indexForTime(playlist, currentTime, this.expired_);
-
-    // find CLOSEST non buffered range
-    let jump = 1;
-
-    console.log('Jumping with ' + index);
-    while (index < playlist.segments.length && index >= 0) {
-      let segment = playlist.segments[index];
-
-      if (!segment.timeInfo) {
-        return index;
-      }
-
-      let midpoint = (segment.timeInfo.video[1].dts - segment.timeInfo.video[0].dts) / 2;
-
-      if (!Ranges.findRange(buffered, midpoint)) {
-        console.log('Jumped: ' + jump);
-        return index;
-      }
-
-      index += jump;
-      jump = -1 * (jump + 1);
-    }
-
-    console.log('OUT');
-    return -1;
+    return timelineUpdated;
   }
 }
+
+/**
+ * Updates segment with information about its end-point in time and, optionally,
+ * the segment duration if we have enough information to determine a segment duration
+ * accurately.
+ *
+ * @param {Object} playlist a media playlist object
+ * @param {Number} segmentIndex the index of segment we last appended
+ * @param {Number} segmentEnd the known of the segment referenced by segmentIndex
+ */
+const updateSegmentMetadata = function(playlist, segmentIndex, segmentEnd) {
+  if (!playlist) {
+    return false;
+  }
+
+  let segment = playlist.segments[segmentIndex];
+  let previousSegment = playlist.segments[segmentIndex - 1];
+
+  if (segmentEnd && segment) {
+    segment.end = segmentEnd;
+
+    // fix up segment durations based on segment end data
+    if (!previousSegment) {
+      // first segment is always has a start time of 0 making its duration
+      // equal to the segment end
+      segment.duration = segment.end;
+    } else if (previousSegment.end) {
+      segment.duration = segment.end - previousSegment.end;
+    }
+    return true;
+  }
+  return false;
+};
