@@ -1,0 +1,27 @@
+#segviz {
+  display: inline-block;
+}
+
+#segviz .viz {
+  margin: 0;
+  padding: 0;
+  position: relative;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  font-family: monospace;
+}
+
+#segviz ul {
+  margin: 0;
+  padding: 0;
+  list-style-type: none;
+  font-size: .8em;
+}
+
+/*
+#segviz .viz canvas {
+  margin: 0;
+  padding: 0;
+  border-style: none;
+}
+*/
