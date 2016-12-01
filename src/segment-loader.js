@@ -514,7 +514,9 @@ export default class SegmentLoader extends videojs.EventTarget {
       // The timeline that the segment is in
       timeline: segment.timeline,
       // The expected duration of the segment in seconds
-      duration: segment.duration
+      duration: segment.duration,
+      // retain the segment in case the playlist updates while doing an async process
+      segment
     };
   }
 
@@ -659,7 +661,7 @@ export default class SegmentLoader extends videojs.EventTarget {
       this.sourceUpdater_.remove(0, removeToTime);
     }
 
-    segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
+    segment = segmentInfo.segment;
 
     // optionally, request the decryption key
     if (segment.key) {
@@ -741,7 +743,7 @@ export default class SegmentLoader extends videojs.EventTarget {
     }
 
     segmentInfo = this.pendingSegment_;
-    segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
+    segment = segmentInfo.segment;
 
     // if a request times out, reset bandwidth tracking
     if (request.timedout) {
@@ -894,7 +896,7 @@ export default class SegmentLoader extends videojs.EventTarget {
     this.state = 'DECRYPTING';
 
     let segmentInfo = this.pendingSegment_;
-    let segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
+    let segment = segmentInfo.segment;
 
     if (segment.key) {
       // this is an encrypted segment
@@ -928,7 +930,7 @@ export default class SegmentLoader extends videojs.EventTarget {
     this.state = 'APPENDING';
 
     let segmentInfo = this.pendingSegment_;
-    let segment = segmentInfo.playlist.segments[segmentInfo.mediaIndex];
+    let segment = segmentInfo.segment;
 
     this.syncController_.probeSegmentInfo(segmentInfo);
 
