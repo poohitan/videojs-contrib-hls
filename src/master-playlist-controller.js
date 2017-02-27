@@ -808,7 +808,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
     // trying to load the master OR while we were disposing of the tech
     if (!currentPlaylist) {
       this.error = error;
-      return this.mediaSource.endOfStream('network');
+      return this.trigger('error');
     }
 
     // Blacklist this playlist
@@ -826,8 +826,8 @@ export class MasterPlaylistController extends videojs.EventTarget {
     videojs.log.warn('Problem encountered with the current ' +
                      'HLS playlist. No suitable alternatives found.');
     // We have no more playlists we can select so we must fail
-    this.error = error;
-    return this.mediaSource.endOfStream('network');
+    this.error = 'No available playlist to select';
+    return this.trigger('error');
   }
 
   /**
