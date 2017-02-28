@@ -830,10 +830,13 @@ export class MasterPlaylistController extends videojs.EventTarget {
     let subtitleGroup = this.activeSubtitleGroup_();
     let track = this.activeSubtitleTrack_();
 
+    this.subtitleSegmentLoader_.pause();
+
     if (!track) {
       // stop playlist and segment loading for subtitles
       if (this.subtitlePlaylistLoader_) {
-        this.subtitlePlaylistLoader_.pause();
+        this.subtitlePlaylistLoader_.dispose();
+        this.subtitlePlaylistLoader_ = null;
       }
       return;
     }
@@ -1068,7 +1071,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
       this.audioSegmentLoader_.pause();
     }
     if (this.subtitlePlaylistLoader_) {
-      this.subtitlePlaylistLoader_.pause();
+      this.subtitleSegmentLoader_.pause();
     }
   }
 
