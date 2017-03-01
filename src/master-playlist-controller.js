@@ -11,6 +11,8 @@ import SyncController from './sync-controller';
 import { translateLegacyCodecs } from 'videojs-contrib-media-sources/es5/codec-utils';
 import worker from 'webworkify';
 import Decrypter from './decrypter-worker';
+import removeCuesFromTrack from
+  'videojs-contrib-media-sources/es5/remove-cues-from-track';
 
 // 5 minute blacklist
 const BLACKLIST_DURATION = 5 * 60 * 1000;
@@ -405,6 +407,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
         this.setupAudio();
         this.trigger('audioupdate');
       }
+      this.setupSubtitles();
 
       this.tech_.trigger({
         type: 'mediachange',
@@ -594,15 +597,6 @@ export class MasterPlaylistController extends videojs.EventTarget {
     let master = this.master();
     let mediaGroups = master.mediaGroups || {};
 
-    // force a default if we have none
-    // TODO: Determine if this needs to be done
-    if (!mediaGroups ||
-        !mediaGroups.SUBTITLES ||
-        Object.keys(mediaGroups.SUBTITLES).length === 0) {
-      // "main" subtitle group, track name "default"
-      mediaGroups.SUBTITLES = { main: { default: { default: true } } };
-    }
-
     for (let mediaGroup in mediaGroups.SUBTITLES) {
       if (!this.subtitleGroups_.groups[mediaGroup]) {
         // this.subtitleGroups_.groups[mediaGroup] = { unforced: [], forced: {} };
@@ -698,6 +692,9 @@ export class MasterPlaylistController extends videojs.EventTarget {
     if (this.audioPlaylistLoader_) {
       this.audioSegmentLoader_.load();
     }
+    if (this.subtitlePlaylistLoader_) {
+      this.subtitleSegmentLoader_.load();
+    }
   }
 
   /**
@@ -719,7 +716,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
    * Returns the subtitle group for the currently active primary
    * media playlist.
    */
-  activeSubtitleGroup() {
+  activeSubtitleGroup_() {
     let videoPlaylist = this.masterPlaylistLoader_.media();
     let result;
 
@@ -728,6 +725,14 @@ export class MasterPlaylistController extends videojs.EventTarget {
     }
 
     return result || this.subtitleGroups_.groups.main;
+  }
+
+  activeSubtitleTrack_() {
+    for (let trackName in this.subtitleGroups_.tracks) {
+      if (this.subtitleGroups_.tracks[trackName].mode === 'showing') {
+        return this.subtitleGroups_.tracks[trackName];
+      }
+    }
   }
 
   /**
@@ -822,21 +827,16 @@ export class MasterPlaylistController extends videojs.EventTarget {
    * invoked again if the track is changed.
    */
   setupSubtitles() {
-    // determine whether seperate loaders are required for the audio
-    // rendition
-    let subtitleGroup = this.activeSubtitleGroup();
-    let track;
-    for (let trackName in this.subtitleGroups_.tracks) {
-      if (this.subtitleGroups_.tracks[trackName].mode === 'showing') {
-        track = this.subtitleGroups_.tracks[trackName];
-        break;
-      }
-    }
+    let subtitleGroup = this.activeSubtitleGroup_();
+    let track = this.activeSubtitleTrack_();
+
+    this.subtitleSegmentLoader_.pause();
 
     if (!track) {
       // stop playlist and segment loading for subtitles
       if (this.subtitlePlaylistLoader_) {
-        this.subtitlePlaylistLoader_.pause();
+        this.subtitlePlaylistLoader_.dispose();
+        this.subtitlePlaylistLoader_ = null;
       }
       return;
     }
@@ -845,14 +845,23 @@ export class MasterPlaylistController extends videojs.EventTarget {
       return subtitleProperties.id === track.id;
     })[0];
 
-    this.subtitleSegmentLoader_.resetEverything();
-
     // startup playlist and segment loaders for the enabled subtitle track
-    if (!this.subtitlePlaylistLoader_ || this.subtitlePlaylistLoader_.state === 'HAVE_NOTHING') {
+    if (!this.subtitlePlaylistLoader_ ||
+        this.subtitlePlaylistLoader_.state === 'HAVE_NOTHING' ||
+        this.subtitlePlaylistLoader_.media().resolvedUri !== properties.resolvedUri) {
+      this.subtitleSegmentLoader_.resetEverything();
+
       if (this.subtitlePlaylistLoader_) {
         this.subtitlePlaylistLoader_.dispose();
       }
 
+      // clear out any current cues so we won't double up later
+      for (let trackKey in this.subtitleGroups_.tracks) {
+        removeCuesFromTrack(0, Infinity, this.subtitleGroups_.tracks[trackKey]);
+      }
+
+      // can't reuse playlistloader because we're only using single renditions and not a
+      // proper master
       this.subtitlePlaylistLoader_ = new PlaylistLoader(properties.resolvedUri,
                                                         this.hls_,
                                                         this.withCredentials);
@@ -861,6 +870,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
         let subtitlePlaylist = this.subtitlePlaylistLoader_.media();
 
         this.subtitleSegmentLoader_.playlist(subtitlePlaylist, this.requestOptions_);
+        this.subtitleSegmentLoader_.track(this.activeSubtitleTrack_());
 
         // if the video is already playing, or if this isn't a live video and preload
         // permits, start downloading segments
@@ -894,12 +904,6 @@ export class MasterPlaylistController extends videojs.EventTarget {
         this.subtitlePlaylistLoader_.abort();
         this.setupSubtiles();
       });
-    }
-
-    let media = this.subtitlePlaylistLoader_.media();
-
-    if (media && properties.resolvedUri !== media.resolvedUri) {
-      this.subtitlePlaylistLoader_.media(properties.resolvedUri);
     }
 
     this.subtitlePlaylistLoader_.load();
@@ -1066,6 +1070,9 @@ export class MasterPlaylistController extends videojs.EventTarget {
     if (this.audioPlaylistLoader_) {
       this.audioSegmentLoader_.pause();
     }
+    if (this.subtitlePlaylistLoader_) {
+      this.subtitleSegmentLoader_.pause();
+    }
   }
 
   /**
@@ -1107,11 +1114,18 @@ export class MasterPlaylistController extends videojs.EventTarget {
       this.audioSegmentLoader_.resetEverything();
       this.audioSegmentLoader_.abort();
     }
+    if (this.subtitlePlaylistLoader_) {
+      this.subtitleSegmentLoader_.resetEverything();
+      this.subtitleSegmentLoader_.abort();
+    }
 
     if (!this.tech_.paused()) {
       this.mainSegmentLoader_.load();
       if (this.audioPlaylistLoader_) {
         this.audioSegmentLoader_.load();
+      }
+      if (this.subtitlePlaylistLoader_) {
+        this.subtitleSegmentLoader_.load();
       }
     }
   }
@@ -1229,6 +1243,9 @@ export class MasterPlaylistController extends videojs.EventTarget {
 
     if (this.audioPlaylistLoader_) {
       this.audioPlaylistLoader_.dispose();
+    }
+    if (this.subtitlePlaylistLoader_) {
+      this.subtitlePlaylistLoader_.dispose();
     }
     this.audioSegmentLoader_.dispose();
   }

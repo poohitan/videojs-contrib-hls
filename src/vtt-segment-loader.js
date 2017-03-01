@@ -7,6 +7,8 @@ import SourceUpdater from './source-updater';
 import Config from './config';
 import window from 'global/window';
 import { createTransferableMessage } from './bin-utils';
+import removeCuesFromTrack from
+  'videojs-contrib-media-sources/es5/remove-cues-from-track';
 
 // in ms
 const CHECK_BUFFER_DELAY = 500;
@@ -236,13 +238,20 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
    * Indicates which time ranges are buffered
    */
   buffered() {
-    // TODO
-    return videojs.createTimeRanges();
+    const cues = this.subtitlesTrack_.cues;
+
+    if (!cues.length) {
+      return videojs.createTimeRanges();
+    }
+
+    let start = cues[0].startTime;
+    let end = cues[cues.length - 1].startTime;
+
+    return videojs.createTimeRanges([[start, end]]);
   }
 
   timestampOffset() {
-    // TODO
-    return this.timestampOffset_;
+    return this.syncController_.timestampOffsetForTimeline(this.currentTimeline_);
   }
 
   /**
@@ -287,6 +296,10 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
     this.state = 'READY';
     this.resetEverything();
     return this.monitorBuffer_();
+  }
+
+  track(track) {
+    this.subtitlesTrack_ = track;
   }
 
   /**
@@ -423,9 +436,7 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
    * @param {Number} end - the end time of the region to remove from the buffer
    */
   remove(start, end) {
-    if (this.sourceUpdater_) {
-      this.sourceUpdater_.remove(start, end);
-    }
+    removeCuesFromTrack(start, end, this.subtitlesTrack_);
   }
 
   /**
@@ -495,16 +506,16 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
       return;
     }
 
-    // We will need to change timestampOffset of the sourceBuffer if either of
-    // the following conditions are true:
-    // - The segment.timeline !== this.currentTimeline
-    //   (we are crossing a discontinuity somehow)
-    // - The "timestampOffset" for the start of this segment is less than
-    //   the currently set timestampOffset
-    if (segmentInfo.timeline !== this.currentTimeline_ ||
-        ((segmentInfo.startOfSegment !== null) &&
-        segmentInfo.startOfSegment < this.timestampOffset())) {
-      segmentInfo.timestampOffset = segmentInfo.startOfSegment;
+    if (this.syncController_.timestampOffsetForTimeline(segmentInfo.timeline) === null) {
+      // We don't have the timestamp offset that we need to sync subtitles.
+      // Rerun on a timestamp offset or user interaction.
+      let checkTimestampOffset = () => {
+        this.syncController_.off('timestampoffset', checkTimestampOffset);
+        this.load();
+      };
+      this.syncController_.on('timestampoffset', checkTimestampOffset);
+      this.pause();
+      return;
     }
 
     this.loadSegment_(segmentInfo);
@@ -717,8 +728,7 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
 
     let segmentRequestOptions = videojs.mergeOptions(this.xhrOptions_, {
       uri: segmentInfo.uri,
-      headers: segmentXhrHeaders(segment),
-      responseType: 'arraybuffer'
+      headers: segmentXhrHeaders(segment)
     });
 
     segmentXhr = this.hls_.xhr(segmentRequestOptions, this.handleResponse_.bind(this));
@@ -861,7 +871,7 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
       if (segment.key) {
         segmentInfo.encryptedBytes = new Uint8Array(request.response);
       } else {
-        segmentInfo.bytes = new Uint8Array(request.response);
+        segmentInfo.bytes = request.response;
       }
     }
 
@@ -921,8 +931,6 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
       return;
     }
 
-    debugger;
-
     let segmentInfo = this.pendingSegment_;
     let segment = segmentInfo.segment;
 
@@ -931,7 +939,7 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
     // Make sure that vttjs has loaded, otherwise, wait till it finished loading
     if (typeof window.WebVTT !== 'function') {
         const loadHandler = () => {
-          this.parseVTTCues_(segmentInfo, this.subtitleTrack_);
+          this.parseVTTCues_(segmentInfo);
           this.handleSegment_();
         };
 
@@ -943,11 +951,11 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
         return;
     }
 
-    this.parseVTTCues_(segmentInfo, this.subtitleTrack_);
+    this.parseVTTCues_(segmentInfo);
     this.handleSegment_();
   }
 
-  parseVTTCues_(segmentInfo, track) {
+  parseVTTCues_(segmentInfo) {
     const parser = new window.WebVTT.Parser(window,
                                             window.vttjs,
                                             window.WebVTT.StringDecoder());
@@ -955,8 +963,8 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
     const cues = [];
     let timestampmap = { MPEGTS: 0, LOCAL: 0 };
 
-    parser.oncue = cues.push;
-    parser.onparsingerror = errors.push;
+    parser.oncue = cues.push.bind(cues);
+    parser.onparsingerror = errors.push.bind(errors);
     parser.ontimestampmap = (map) => timestampmap = map;
 
     parser.onflush = () => {
@@ -1013,15 +1021,19 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
       }
     }
 
-    segmentInfo.byteLength = segmentInfo.bytes.byteLength;
+    segmentInfo.byteLength = segmentInfo.bytes.length;
+
     if (typeof segment.start === 'number' && typeof segment.end === 'number') {
       this.mediaSecondsLoaded += segment.end - segment.start;
     } else {
       this.mediaSecondsLoaded += segment.duration;
     }
 
-    this.sourceUpdater_.appendBuffer(segmentInfo.bytes,
-                                     this.handleUpdateEnd_.bind(this));
+    segmentInfo.cues.forEach((cue) => {
+      this.subtitlesTrack_.addCue(cue);
+    });
+
+    this.handleUpdateEnd_();
   }
 
   updateTimeMapping_(segmentInfo) {
@@ -1053,6 +1065,8 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
 
     segment.start = midPoint - (segment.duration / 2);
     segment.end = midPoint + (segment.duration / 2);
+
+    // TODO - adjust other segments with new info
   }
 
   /**
@@ -1105,17 +1119,6 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
     // Don't do a rendition switch unless the SegmentLoader is already walking forward
     if (isWalkingForward) {
       this.trigger('progress');
-    }
-
-    // any time an update finishes and the last segment is in the
-    // buffer, end the stream. this ensures the "ended" event will
-    // fire if playback reaches that point.
-    let isEndOfStream = detectEndOfStream(segmentInfo.playlist,
-                                          this.mediaSource_,
-                                          this.mediaIndex + 1);
-
-    if (isEndOfStream) {
-      this.mediaSource_.endOfStream();
     }
 
     if (!this.paused()) {
