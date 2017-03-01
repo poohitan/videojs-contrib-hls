@@ -443,16 +443,32 @@ QUnit.test('re-initializes the handler for each source', function(assert) {
 });
 
 QUnit.test('triggers an error when a master playlist request errors', function(assert) {
+  assert.expect(3);
+
+  const origError = videojs.log.error;
+  const errLogs = [];
+
+  videojs.log.error = errLogs.push;
+
   this.player.src({
     src: 'manifest/master.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
   openMediaSource(this.player, this.clock);
+
+  this.player.on('error', () => {
+    const error = this.player.error();
+
+    assert.equal(error.code, 2, 'error has correct code');
+    assert.equal(error.message,
+                 'HLS playlist request error at URL: manifest/master.m3u8',
+                 'error has correct message');
+    assert.equal(errLogs.length, 1, 'logged an error');
+  });
+
   this.requests.pop().respond(500);
 
-  assert.equal(this.player.tech_.hls.mediaSource.error_,
-               'network',
-               'a network error is triggered');
+  videojs.log.error = origError;
 });
 
 QUnit.test('downloads media playlists after loading the master', function(assert) {
