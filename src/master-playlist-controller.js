@@ -451,12 +451,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
       this.setupAudio();
     });
 
-    this.subtitleSegmentLoader_.on('error', () => {
-      videojs.log.warn('Problem encountered with the current subtitle track. Switching' +
-                       ' back to default.');
-      this.subtitleSegmentLoader_.abort();
-      this.setupSubtitles();
-    })
+    this.subtitleSegmentLoader_.on('error', this.handleSubtitleError_.bind(this));
   }
 
   handleAudioinfoUpdate_(event) {
@@ -606,34 +601,6 @@ export class MasterPlaylistController extends videojs.EventTarget {
       for (let label in mediaGroups.SUBTITLES[mediaGroup]) {
         let properties = mediaGroups.SUBTITLES[mediaGroup][label];
 
-        // if (properties.forced) {
-        //   if (!this.subtitleGroups_.groups[mediaGroup].forced[properties.language]) {
-        //     this.subtitleGroups_[mediaGroup].forced[properties.language] = [];
-        //   }
-
-        //   this.subtitleGroups_[mediaGroup].forced[properties.language].push({
-        //     id: label,
-        //     properties
-        //   });
-        // } else {
-        //   this.subtitleGroups_.groups[mediaGroup].unforced.push({
-        //     id: label,
-        //     properties
-        //   });
-
-        //   if (typeof this.subtitleGroups_.tracks[label] === 'undefined') {
-        //     let track = this.tech_.addRemoteTextTrack({
-        //       id: label,
-        //       kind: 'subtitles',
-        //       enabled: false,
-        //       language: properties.language,
-        //       label
-        //     }, true).track;
-
-        //     track.properties_ = properties;
-        //     this.subtitleGroups_.tracks[label] = track;
-        //   }
-        // }
         if (!properties.forced) {
           this.subtitleGroups_.groups[mediaGroup].push(
             videojs.mergeOptions({ id: label }, properties));
@@ -653,35 +620,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
       }
     }
 
-    // for (let mediaGroup in this.subtitleGroups_) {
-    //   for (let lang in this.subtitleGroups_[mediaGroup].forced) {
-    //     let foundLang = this.subtitleGroups_[mediaGroup].tracks.find((track) => {
-    //       return track.language === lang;
-    //     });
-
-    //     if (typeof foundLang === 'undefined') {
-    //       let forcedLang = this.subtitleGroups_[mediaGroup].forced[lang].shift();
-
-    //       let track = this.tech_.addRemoteTextTrack({
-    //         id: forcedLang.id,
-    //         kind: 'subtitles',
-    //         enabled: false,
-    //         language: lang,
-    //         label: forcedLang.id
-    //       }, true).track;
-
-    //       track.properties_ = forcedLang.properties;
-    //       this.subtitleGroups_[mediaGroup].tracks.push(track);
-    //     }
-    //   }
-    // }
-
     // Do not enable a default subtitle track. Wait for user interaction instead.
-
-    // enable the default active track
-    // let activeName = (this.activeSubtitleGroup().unforced.filter((subtitleTrack) => {
-    //   return subtitleTrack.properties.default;
-    // })[0] || this.activeSubtitleGroup().unforced[0]).id;
   }
 
   /**
@@ -733,6 +672,21 @@ export class MasterPlaylistController extends videojs.EventTarget {
         return this.subtitleGroups_.tracks[trackName];
       }
     }
+  }
+
+  handleSubtitleError_() {
+    videojs.log.warn('Problem encountered loading the subtitle track' +
+                     '. Switching back to default.');
+
+    this.subtitleSegmentLoader_.abort();
+
+    let track = this.activeSubtitleTrack_();
+
+    if (track) {
+      track.mode = 'disabled';
+    }
+
+    this.setupSubtitles();
   }
 
   /**
@@ -847,7 +801,9 @@ export class MasterPlaylistController extends videojs.EventTarget {
 
     // startup playlist and segment loaders for the enabled subtitle track
     if (!this.subtitlePlaylistLoader_ ||
-        this.subtitlePlaylistLoader_.state === 'HAVE_NOTHING' ||
+        // if the media hasn't loaded yet, we don't have the URI to check, so it is
+        // easiest to simply recreate the playlist loader
+        !this.subtitlePlaylistLoader_.media() ||
         this.subtitlePlaylistLoader_.media().resolvedUri !== properties.resolvedUri) {
 
       if (this.subtitlePlaylistLoader_) {
@@ -875,10 +831,6 @@ export class MasterPlaylistController extends videojs.EventTarget {
             (subtitlePlaylist.endList && this.tech_.preload() !== 'none')) {
           this.subtitleSegmentLoader_.load();
         }
-
-        // if (!subtitlePlaylist.endList) {
-        //   this.subtitlePlaylistLoader_.trigger('firstplay');
-        // }
       });
 
       this.subtitlePlaylistLoader_.on('loadedplaylist', () => {
@@ -895,12 +847,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
         this.subtitleSegmentLoader_.playlist(updatedPlaylist, this.requestOptions_);
       });
 
-      this.subtitlePlaylistLoader_.on('error', () => {
-        videojs.log.warn('Problem encountered loading the subtitle track' +
-                         '. Switching back to default.');
-        this.subtitlePlaylistLoader_.abort();
-        this.setupSubtiles();
-      });
+      this.subtitlePlaylistLoader_.on('error', this.handleSubtitleError_.bind(this));
     }
 
     if (this.subtitlePlaylistLoader_.media() &&
@@ -1250,6 +1197,7 @@ export class MasterPlaylistController extends videojs.EventTarget {
       this.subtitlePlaylistLoader_.dispose();
     }
     this.audioSegmentLoader_.dispose();
+    this.subtitleSegmentLoader_.dispose();
   }
 
   /**
