@@ -1,45 +1,16 @@
 /**
- * @file segment-loader.js
+ * @file vtt-segment-loader.js
  */
 import {getMediaInfoForTime_ as getMediaInfoForTime} from './playlist';
 import videojs from 'video.js';
-import SourceUpdater from './source-updater';
 import Config from './config';
 import window from 'global/window';
 import { createTransferableMessage } from './bin-utils';
-import removeCuesFromTrack from 'videojs-contrib-media-sources/es5/remove-cues-from-track.js';
+import removeCuesFromTrack from
+  'videojs-contrib-media-sources/es5/remove-cues-from-track';
 
 // in ms
 const CHECK_BUFFER_DELAY = 500;
-
-/**
- * Determines if we should call endOfStream on the media source based
- * on the state of the buffer or if appened segment was the final
- * segment in the playlist.
- *
- * @param {Object} playlist a media playlist object
- * @param {Object} mediaSource the MediaSource object
- * @param {Number} segmentIndex the index of segment we last appended
- * @returns {Boolean} do we need to call endOfStream on the MediaSource
- */
-const detectEndOfStream = function(playlist, mediaSource, segmentIndex) {
-  if (!playlist) {
-    return false;
-  }
-
-  let segments = playlist.segments;
-
-  // determine a few boolean values to help make the branch below easier
-  // to read
-  let appendedLastSegment = segmentIndex === segments.length;
-
-  // if we've buffered to the end of the video, we need to call endOfStream
-  // so that MediaSources can trigger the `ended` event when it runs out of
-  // buffered data instead of waiting for me
-  return playlist.endList &&
-    mediaSource.readyState === 'open' &&
-    appendedLastSegment;
-};
 
 /**
  * Turns segment byterange into a string suitable for use in
@@ -83,14 +54,18 @@ const initSegmentId = function(initSegment) {
   ].join(',');
 };
 
+const uintToString = function(uintArray) {
+  return String.fromCharCode.apply(null, uintArray);
+};
+
 /**
  * An object that manages segment loading and appending.
  *
- * @class SegmentLoader
+ * @class VTTSegmentLoader
  * @param {Object} options required and optional options
  * @extends videojs.EventTarget
  */
-export default class SegmentLoader extends videojs.EventTarget {
+export default class VTTSegmentLoader extends videojs.EventTarget {
   constructor(options) {
     super();
     // check pre-conditions
@@ -99,9 +74,6 @@ export default class SegmentLoader extends videojs.EventTarget {
     }
     if (typeof options.currentTime !== 'function') {
       throw new TypeError('No currentTime getter specified');
-    }
-    if (!options.mediaSource) {
-      throw new TypeError('No MediaSource specified');
     }
     let settings = videojs.mergeOptions(videojs.options.hls, options);
 
@@ -122,7 +94,6 @@ export default class SegmentLoader extends videojs.EventTarget {
     this.mediaSource_ = settings.mediaSource;
     this.hls_ = settings.hls;
     this.loaderType_ = settings.loaderType;
-    this.segmentMetadataTrack_ = settings.segmentMetadataTrack;
 
     // private instance variables
     this.checkBufferTimeout_ = null;
@@ -130,12 +101,12 @@ export default class SegmentLoader extends videojs.EventTarget {
     this.currentTimeline_ = -1;
     this.xhr_ = null;
     this.pendingSegment_ = null;
-    this.mimeType_ = null;
     this.sourceUpdater_ = null;
     this.xhrOptions_ = null;
 
+    this.subtitlesTrack_ = null;
+
     // Fragmented mp4 playback
-    this.activeInitSegmentId_ = null;
     this.initSegments_ = {};
 
     this.decrypter_ = settings.decrypter;
@@ -177,9 +148,6 @@ export default class SegmentLoader extends videojs.EventTarget {
   dispose() {
     this.state = 'DISPOSED';
     this.abort_();
-    if (this.sourceUpdater_) {
-      this.sourceUpdater_.dispose();
-    }
     this.resetStats_();
   }
 
@@ -235,6 +203,25 @@ export default class SegmentLoader extends videojs.EventTarget {
   }
 
   /**
+   * Indicates which time ranges are buffered
+   */
+  buffered() {
+    if (!this.subtitlesTrack_ || !this.subtitlesTrack_.cues.length) {
+      return videojs.createTimeRanges();
+    }
+
+    const cues = this.subtitlesTrack_.cues;
+    let start = cues[0].startTime;
+    let end = cues[cues.length - 1].startTime;
+
+    return videojs.createTimeRanges([[start, end]]);
+  }
+
+  timestampOffset() {
+    return this.syncController_.timestampOffsetForTimeline(this.currentTimeline_);
+  }
+
+  /**
    * load a playlist and start to fill the buffer
    */
   load() {
@@ -251,15 +238,14 @@ export default class SegmentLoader extends videojs.EventTarget {
     this.syncController_.setDateTimeMapping(this.playlist_);
 
     // if all the configuration is ready, initialize and begin loading
-    if (this.state === 'INIT' && this.mimeType_) {
+    if (this.state === 'INIT' && this.subtitlesTrack_) {
       return this.init_();
     }
 
     // if we're in the middle of processing a segment already, don't
     // kick off an additional segment request
-    if (!this.sourceUpdater_ ||
-        (this.state !== 'READY' &&
-        this.state !== 'INIT')) {
+    if (this.state !== 'READY' &&
+        this.state !== 'INIT') {
       return;
     }
 
@@ -275,9 +261,21 @@ export default class SegmentLoader extends videojs.EventTarget {
    */
   init_() {
     this.state = 'READY';
-    this.sourceUpdater_ = new SourceUpdater(this.mediaSource_, this.mimeType_);
     this.resetEverything();
     return this.monitorBuffer_();
+  }
+
+  track(track) {
+    this.subtitlesTrack_ = track;
+
+    // if we were unpaused but waiting for a sourceUpdater, start
+    // buffering now
+    if (this.playlist_ &&
+        this.state === 'INIT' &&
+        !this.paused() &&
+        this.subtitlesTrack_) {
+      this.init_();
+    }
   }
 
   /**
@@ -312,7 +310,7 @@ export default class SegmentLoader extends videojs.EventTarget {
 
     // if we were unpaused but waiting for a playlist, start
     // buffering now
-    if (this.mimeType_ && this.state === 'INIT' && !this.paused()) {
+    if (this.subtitlesTrack_ && this.state === 'INIT' && !this.paused()) {
       return this.init_();
     }
 
@@ -381,27 +379,6 @@ export default class SegmentLoader extends videojs.EventTarget {
   }
 
   /**
-   * create/set the following mimetype on the SourceBuffer through a
-   * SourceUpdater
-   *
-   * @param {String} mimeType the mime type string to use
-   */
-  mimeType(mimeType) {
-    if (this.mimeType_) {
-      return;
-    }
-
-    this.mimeType_ = mimeType;
-    // if we were unpaused but waiting for a sourceUpdater, start
-    // buffering now
-    if (this.playlist_ &&
-        this.state === 'INIT' &&
-        !this.paused()) {
-      this.init_();
-    }
-  }
-
-  /**
    * Delete all the buffered data and reset the SegmentLoader
    */
   resetEverything() {
@@ -435,10 +412,7 @@ export default class SegmentLoader extends videojs.EventTarget {
    * @param {Number} end - the end time of the region to remove from the buffer
    */
   remove(start, end) {
-    if (this.sourceUpdater_) {
-      this.sourceUpdater_.remove(start, end);
-    }
-    removeCuesFromTrack(start, end, this.segmentMetadataTrack_);
+    removeCuesFromTrack(start, end, this.subtitlesTrack_);
   }
 
   /**
@@ -483,10 +457,6 @@ export default class SegmentLoader extends videojs.EventTarget {
    * @private
    */
   fillBuffer_() {
-    if (this.sourceUpdater_.updating()) {
-      return;
-    }
-
     if (!this.syncPoint_) {
       this.syncPoint_ = this.syncController_.getSyncPoint(this.playlist_,
                                                           this.mediaSource_.duration,
@@ -495,7 +465,7 @@ export default class SegmentLoader extends videojs.EventTarget {
     }
 
     // see if we need to begin loading immediately
-    let segmentInfo = this.checkBuffer_(this.sourceUpdater_.buffered(),
+    let segmentInfo = this.checkBuffer_(this.buffered(),
                                         this.playlist_,
                                         this.mediaIndex,
                                         this.hasPlayed_(),
@@ -506,32 +476,28 @@ export default class SegmentLoader extends videojs.EventTarget {
       return;
     }
 
-    let isEndOfStream = detectEndOfStream(this.playlist_,
-                                          this.mediaSource_,
-                                          segmentInfo.mediaIndex);
+    // TODO is this check important
+    // if (segmentInfo.mediaIndex === this.playlist_.segments.length - 1 &&
+    //     this.mediaSource_.readyState === 'ended' &&
+    //     !this.seeking_()) {
+    //   return;
+    // }
 
-    if (isEndOfStream) {
-      this.mediaSource_.endOfStream();
+    if (this.syncController_.timestampOffsetForTimeline(segmentInfo.timeline) === null) {
+      // We don't have the timestamp offset that we need to sync subtitles.
+      // Rerun on a timestamp offset or user interaction.
+      let checkTimestampOffset = () => {
+        this.syncController_.off('timestampoffset', checkTimestampOffset);
+        this.state = 'READY';
+        if (!this.paused()) {
+          // if not paused, queue a buffer check as soon as possible
+          this.monitorBuffer_();
+        }
+      };
+
+      this.syncController_.on('timestampoffset', checkTimestampOffset);
+      this.state = 'WAITING_ON_TIMELINE';
       return;
-    }
-
-    if (segmentInfo.mediaIndex === this.playlist_.segments.length - 1 &&
-        this.mediaSource_.readyState === 'ended' &&
-        !this.seeking_()) {
-      return;
-    }
-
-    // We will need to change timestampOffset of the sourceBuffer if either of
-    // the following conditions are true:
-    // - The segment.timeline !== this.currentTimeline
-    //   (we are crossing a discontinuity somehow)
-    // - The "timestampOffset" for the start of this segment is less than
-    //   the currently set timestampOffset
-    if (segmentInfo.timeline !== this.currentTimeline_ ||
-        ((segmentInfo.startOfSegment !== null) &&
-        segmentInfo.startOfSegment < this.sourceUpdater_.timestampOffset())) {
-      this.syncController_.reset();
-      segmentInfo.timestampOffset = segmentInfo.startOfSegment;
     }
 
     this.loadSegment_(segmentInfo);
@@ -1006,7 +972,63 @@ export default class SegmentLoader extends videojs.EventTarget {
     let segmentInfo = this.pendingSegment_;
     let segment = segmentInfo.segment;
 
-    this.syncController_.probeSegmentInfo(segmentInfo);
+    // Make sure that vttjs has loaded, otherwise, wait till it finished loading
+    if (typeof window.WebVTT !== 'function' &&
+        this.subtitlesTrack_ &&
+        this.subtitlesTrack_.tech_) {
+
+      const loadHandler = () => {
+        this.subtitlesTrack_.tech_.off('vttjsloaded', loadHandler);
+        this.handleSegment_();
+      };
+
+      this.state = 'WAITING_ON_VTTJS';
+      this.subtitlesTrack_.tech_.on('vttjsloaded', loadHandler);
+      this.subtitlesTrack_.tech_.on('vttjserror', () => {
+        this.subtitlesTrack_.tech_.off('vttjsloaded', loadHandler);
+        this.error({
+          message: 'Error loading vtt.js'
+        });
+        this.state = 'READY';
+        this.pause();
+        this.trigger('error');
+      });
+
+      return;
+    }
+
+    segment.requested = true;
+
+    if (segment.map) {
+      // append WebVTT line terminators to the media initialization segment if it exists
+      // to follow the WebVTT spec (https://w3c.github.io/webvtt/#file-structure) that
+      // requires two or more WebVTT line terminators between the WebVTT header and the rest
+      // of the file
+      const initId = initSegmentId(segment.map);
+      const initSegment = this.initSegments_[initId];
+      const vttLineTerminators = new Uint8Array('\n\n'.split('').map(char => char.charCodeAt(0)));
+      const combinedByteLength = vttLineTerminators.byteLength + initSegment.bytes.byteLength;
+      const combinedSegment = new Uint8Array(combinedByteLength);
+
+      combinedSegment.set(initSegment.bytes);
+      combinedSegment.set(vttLineTerminators, initSegment.bytes.byteLength);
+      segment.map.bytes = combinedSegment;
+    }
+
+    try {
+      this.parseVTTCues_(segmentInfo);
+    } catch (e) {
+      this.error({
+        message: e.message
+      });
+      this.state = 'READY';
+      this.pause();
+      return this.trigger('error');
+    }
+
+    this.updateTimeMapping_(segmentInfo,
+                            this.syncController_.timelines[segmentInfo.timeline],
+                            this.playlist_);
 
     if (segmentInfo.isSyncRequest) {
       this.trigger('syncinfoupdate');
@@ -1015,35 +1037,101 @@ export default class SegmentLoader extends videojs.EventTarget {
       return;
     }
 
-    if (segmentInfo.timestampOffset !== null &&
-        segmentInfo.timestampOffset !== this.sourceUpdater_.timestampOffset()) {
-      this.sourceUpdater_.timestampOffset(segmentInfo.timestampOffset);
-    }
-
-    // if the media initialization segment is changing, append it
-    // before the content segment
-    if (segment.map) {
-      let initId = initSegmentId(segment.map);
-
-      if (!this.activeInitSegmentId_ ||
-          this.activeInitSegmentId_ !== initId) {
-        let initSegment = this.initSegments_[initId];
-
-        this.sourceUpdater_.appendBuffer(initSegment.bytes, () => {
-          this.activeInitSegmentId_ = initId;
-        });
-      }
-    }
-
     segmentInfo.byteLength = segmentInfo.bytes.byteLength;
+
     if (typeof segment.start === 'number' && typeof segment.end === 'number') {
       this.mediaSecondsLoaded += segment.end - segment.start;
     } else {
       this.mediaSecondsLoaded += segment.duration;
     }
 
-    this.sourceUpdater_.appendBuffer(segmentInfo.bytes,
-                                     this.handleUpdateEnd_.bind(this));
+    segmentInfo.cues.forEach((cue) => {
+      this.subtitlesTrack_.addCue(cue);
+    });
+
+    this.handleUpdateEnd_();
+  }
+
+  parseVTTCues_(segmentInfo) {
+    let decoder;
+    let decodeBytesToString = false;
+
+    if (typeof window.TextDecoder === 'function') {
+      decoder = new window.TextDecoder('utf8');
+    } else {
+      decoder = window.WebVTT.StringDecoder();
+      decodeBytesToString = true;
+    }
+
+    const parser = new window.WebVTT.Parser(window,
+                                            window.vttjs,
+                                            decoder);
+
+    segmentInfo.cues = [];
+    segmentInfo.timestampmap = { MPEGTS: 0, LOCAL: 0 };
+
+    parser.oncue = segmentInfo.cues.push.bind(segmentInfo.cues);
+    parser.ontimestampmap = (map) => segmentInfo.timestampmap = map;
+    parser.onparsingerror = (error) => {
+      videojs.log.warn('Error encountered when parsing cues: ' + error.message);
+    };
+
+    if (segmentInfo.segment.map) {
+      let mapData = segmentInfo.segment.map.bytes;
+
+      if (decodeBytesToString) {
+        mapData = uintToString(mapData);
+      }
+
+      parser.parse(mapData);
+    }
+
+    let segmentData = segmentInfo.bytes;
+
+    if (decodeBytesToString) {
+      segmentData = uintToString(segmentData);
+    }
+
+    parser.parse(segmentData);
+    parser.flush();
+  }
+
+  updateTimeMapping_(segmentInfo, mappingObj, playlist) {
+    let segment = segmentInfo.segment;
+    let timestampmap = segmentInfo.timestampmap;
+
+    if (!mappingObj || !segmentInfo.cues.length) {
+      // If the sync controller does not have a mapping of TS to Media Time for the
+      // timeline, then we don't have enough information to update the segment and cue
+      // start/end times
+      // If there are no cues, we also do not have enough information to figure out
+      // segment timing
+      return;
+    }
+
+    const diff = (timestampmap.MPEGTS / 90000) - timestampmap.LOCAL + mappingObj.mapping;
+
+    segmentInfo.cues.forEach((cue) => {
+      // First convert cue time to TS time using the timestamp-map provided within the vtt
+      cue.startTime += diff;
+      cue.endTime += diff;
+    });
+
+    const firstStart = segmentInfo.cues[0].startTime;
+    const lastStart = segmentInfo.cues[segmentInfo.cues.length - 1].startTime;
+    const midPoint = (firstStart + lastStart) / 2;
+
+    segment.start = midPoint - (segment.duration / 2);
+    segment.end = midPoint + (segment.duration / 2);
+
+    if (!playlist.syncInfo) {
+      playlist.syncInfo = {
+        mediaSequence: playlist.mediaSequence + segmentInfo.mediaIndex,
+        time: segment.start
+      };
+    }
+
+    // TODO - adjust other segments with new info
   }
 
   /**
@@ -1070,7 +1158,6 @@ export default class SegmentLoader extends videojs.EventTarget {
 
     this.pendingSegment_ = null;
     this.recordThroughput_(segmentInfo);
-    this.addSegmentMetadataCue_(segmentInfo);
 
     this.state = 'READY';
 
@@ -1097,17 +1184,6 @@ export default class SegmentLoader extends videojs.EventTarget {
     // Don't do a rendition switch unless the SegmentLoader is already walking forward
     if (isWalkingForward) {
       this.trigger('progress');
-    }
-
-    // any time an update finishes and the last segment is in the
-    // buffer, end the stream. this ensures the "ended" event will
-    // fire if playback reaches that point.
-    let isEndOfStream = detectEndOfStream(segmentInfo.playlist,
-                                          this.mediaSource_,
-                                          this.mediaIndex + 1);
-
-    if (isEndOfStream) {
-      this.mediaSource_.endOfStream();
     }
 
     if (!this.paused()) {
@@ -1147,42 +1223,4 @@ export default class SegmentLoader extends videojs.EventTarget {
    * @private
    */
   logger_() {}
-
-  /**
-   * Adds a cue to the segment-metadata track with some metadata information about the
-   * segment
-   *
-   * @private
-   * @param {Object} segmentInfo
-   *        the object returned by loadSegment
-   * @method addSegmentMetadataCue_
-   */
-  addSegmentMetadataCue_(segmentInfo) {
-    if (!this.segmentMetadataTrack_) {
-      return;
-    }
-
-    const segment = segmentInfo.segment;
-    const start = segment.start;
-    const end = segment.end;
-
-    removeCuesFromTrack(start, end, this.segmentMetadataTrack_);
-
-    const Cue = window.WebKitDataCue || window.VTTCue;
-    const value = {
-      uri: segmentInfo.uri,
-      timeline: segmentInfo.timeline,
-      playlist: segmentInfo.playlist.uri,
-      start,
-      end
-    };
-    const data = JSON.stringify(value);
-    const cue = new Cue(start, end, data);
-
-    // Attach the metadata to the value property of the cue to keep consistency between
-    // the differences of WebKitDataCue in safari and VTTCue in other browsers
-    cue.value = value;
-
-    this.segmentMetadataTrack_.addCue(cue);
-  }
 }
