@@ -1130,8 +1130,6 @@ export default class VTTSegmentLoader extends videojs.EventTarget {
         time: segment.start
       };
     }
-
-    // TODO - adjust other segments with new info
   }
 
   /**

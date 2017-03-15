@@ -274,8 +274,9 @@ export class MasterPlaylistController extends videojs.EventTarget {
       loaderType: 'audio'
     }));
 
-    segmentLoaderOptions.loaderType = 'vtt';
-    this.subtitleSegmentLoader_ = new VTTSegmentLoader(segmentLoaderOptions);
+    this.subtitleSegmentLoader_ = new VTTSegmentLoader(videojs.mergeOptions(segmentLoaderOptions, {
+      loaderType: 'vtt'
+    }));
 
     this.decrypter_.onmessage = (event) => {
       if (event.data.source === 'main') {
@@ -623,7 +624,6 @@ export class MasterPlaylistController extends videojs.EventTarget {
 
     for (let mediaGroup in mediaGroups.SUBTITLES) {
       if (!this.subtitleGroups_.groups[mediaGroup]) {
-        // this.subtitleGroups_.groups[mediaGroup] = { unforced: [], forced: {} };
         this.subtitleGroups_.groups[mediaGroup] = [];
       }
 
