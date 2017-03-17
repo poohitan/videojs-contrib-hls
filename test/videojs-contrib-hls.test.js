@@ -443,12 +443,11 @@ QUnit.test('re-initializes the handler for each source', function(assert) {
 });
 
 QUnit.test('triggers an error when a master playlist request errors', function(assert) {
-  assert.expect(3);
-
+  const done = assert.async();
   const origError = videojs.log.error;
   const errLogs = [];
 
-  videojs.log.error = errLogs.push;
+  videojs.log.error = (log) => errLogs.push(log);
 
   this.player.src({
     src: 'manifest/master.m3u8',
@@ -464,11 +463,13 @@ QUnit.test('triggers an error when a master playlist request errors', function(a
                  'HLS playlist request error at URL: manifest/master.m3u8',
                  'error has correct message');
     assert.equal(errLogs.length, 1, 'logged an error');
+
+    videojs.log.error = origError;
+
+    done();
   });
 
   this.requests.pop().respond(500);
-
-  videojs.log.error = origError;
 });
 
 QUnit.test('downloads media playlists after loading the master', function(assert) {
@@ -1039,14 +1040,33 @@ QUnit.test('does not abort segment loading for in-buffer seeking', function(asse
 });
 
 QUnit.test('playlist 404 should end stream with a network error', function(assert) {
+  const done = assert.async();
+  const origError = videojs.log.error;
+  const errLogs = [];
+
+  videojs.log.error = (log) => errLogs.push(log);
+
   this.player.src({
     src: 'manifest/media.m3u8',
     type: 'application/vnd.apple.mpegurl'
   });
   openMediaSource(this.player, this.clock);
-  this.requests.pop().respond(404);
 
-  assert.equal(this.player.tech_.hls.mediaSource.error_, 'network', 'set a network error');
+  this.player.on('error', () => {
+    const error = this.player.error();
+
+    assert.equal(error.code, 2, 'error has correct code');
+    assert.equal(error.message,
+                 'HLS playlist request error at URL: manifest/media.m3u8',
+                 'error has correct message');
+    assert.equal(errLogs.length, 1, 'logged an error');
+
+    videojs.log.error = origError;
+
+    done();
+  });
+
+  this.requests.pop().respond(404);
 });
 
 QUnit.test('segment 404 should trigger blacklisting of media', function(assert) {
@@ -2807,6 +2827,7 @@ QUnit.test('blacklists playlist if key requests fail', function(assert) {
   assert.ok(hls.playlists.media().excludeUntil > 0,
            'playlist blacklisted');
   assert.equal(this.env.log.warn.calls, 1, 'logged warning for blacklist');
+  assert.equal(this.env.log.error.calls, 1, 'logged error for no remaining media');
 });
 
 QUnit.test('treats invalid keys as a key request failure and blacklists playlist', function(assert) {
@@ -2844,6 +2865,7 @@ QUnit.test('treats invalid keys as a key request failure and blacklists playlist
   assert.ok(hls.playlists.media().excludeUntil > 0,
            'blacklisted playlist');
   assert.equal(this.env.log.warn.calls, 1, 'logged warning for blacklist');
+  assert.equal(this.env.log.error.calls, 1, 'logged error for no remaining media');
 
   // verify stats
   assert.equal(hls.stats.mediaBytesTransferred, 1024, '1024 bytes');
